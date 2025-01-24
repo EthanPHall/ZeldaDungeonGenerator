@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 //using System.Drawing.Bitmap;
 
@@ -13,6 +14,18 @@ public class GettingFamiliarWithBitmaps : MonoBehaviour
     // Start is called before the first frame update
     void Start()
     {
+        Vector2[,] roomSeeds = new Vector2[48, 48];
+        //Print out all of the room seeds
+        for (int i = 0; i < 48; i++)
+        {
+            for (int j = 0; j < 48; j++)
+            {
+                Debug.Log("Room Seed at position (" + i + ", " + j + ") is " + roomSeeds[i, j]);
+            }
+        }
+
+        return;
+
         Debug.Log("Hello World");
         Debug.Log("Width: " + path.width);
         Debug.Log("Height: " + path.height);

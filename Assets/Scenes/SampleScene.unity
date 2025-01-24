@@ -320,8 +320,9 @@ GameObject:
   - component: {fileID: 1285899287}
   - component: {fileID: 1285899286}
   - component: {fileID: 1285899288}
+  - component: {fileID: 1285899289}
   m_Layer: 0
-  m_Name: GameObject
+  m_Name: Map Generator
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -376,7 +377,7 @@ SpriteRenderer:
   m_Size: {x: 0.48, y: 0.48}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
-  m_WasSpriteAssigned: 1
+  m_WasSpriteAssigned: 0
   m_MaskInteraction: 0
   m_SpriteSortPoint: 0
 --- !u!4 &1285899287
@@ -401,12 +402,28 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1285899285}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b9f1eba1eef78bd45a6f8637b25df9d8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  path: {fileID: 2800000, guid: cf59dff00cc25f144ac4e0541d2e4901, type: 3}
+  path: {fileID: 2800000, guid: 8f1ba9e2e3e4edf47a5445f182c80b34, type: 3}
+  redCube: {fileID: 5318241218987947542, guid: d8fcd9ba6ab374b40a61c04a17ee90ec, type: 3}
+  greyCube: {fileID: 1736673083963078425, guid: fcd0a96520112d243b00b2a76ecf46b3, type: 3}
+--- !u!114 &1285899289
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1285899285}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7580057ea36aff94293cd431ec7b3875, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  generateNewMap: 0
+  usePathsFromLevel: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
