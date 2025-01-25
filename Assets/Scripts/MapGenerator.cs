@@ -393,6 +393,7 @@ public class CriticalPathVisitor: PixelVisitor
     private int sectionNumber;
     private RoomSeed previousSeed = null;
     private CriticalPathVisitor successorOf = null;
+    private bool reachedBossRoom = false;
 
     public CriticalPathVisitor(Vector2Int position, Directions direction, Texture2D toVisit, int sectionNumber) : base(position, direction, toVisit)
     {
@@ -427,7 +428,7 @@ public class CriticalPathVisitor: PixelVisitor
             return new MoveReport(false, isDone);
         }
 
-        bool successfullyMoved = false;
+        bool successfullyMoved = isDone;
         foreach (Directions potentialDirection in prelimData.toCheck)
         {
             Pixel neighbor = currentNeighbors.GetNeighbor(potentialDirection);
@@ -440,16 +441,18 @@ public class CriticalPathVisitor: PixelVisitor
                     successfullyMoved = true;
                     break;
                 }
-                else if (neighbor.Color.Equals(Color.black))
+                else if(neighbor.Color.Equals(Color.black))
                 {
-                    //Debug.Log("Critical Path Visitor is Done");
-                    position += DirectionsUtil.GetDirectionVector(potentialDirection);
-                    direction = potentialDirection;
-                    isDone = true;
-                    successfullyMoved = false;
+                    reachedBossRoom = true;
                     break;
                 }
             }
+        }
+
+        if (!successfullyMoved)
+        {
+            //We've reached the end of this branch, so we're done.
+            isDone = true;
         }
 
         return new MoveReport(successfullyMoved, isDone);
@@ -635,14 +638,11 @@ public class MapGenerator : MonoBehaviour
         //make some rooms.
         RoomSeed[,] roomSeeds = new RoomSeed[48, 48];
         CriticalPathVisitor currentVisitor = branchStarters.Dequeue();
-        int counter = 0;
         while (currentVisitor != null)
         {
             MoveReport branchMoveReport = null;
-
             do
             {
-                counter++;
                 VisitReport visitReport = currentVisitor.Visit();
 
                 if (!visitReport.WasSuccessful)
@@ -657,7 +657,8 @@ public class MapGenerator : MonoBehaviour
                     newSeed = roomSeeds[newSeed.Position.y, newSeed.Position.x];
                 }
 
-                newSeed.AddEntrance(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber));
+                //We reverse the direction because, for example, the visitor moves to the right, entering the new room from the left.
+                newSeed.AddEntrance(new TravelData(DirectionsUtil.GetOppositeDirection(currentVisitor.Direction), currentVisitor.SectionNumber));
 
                 //Before we add the new seed, we want to add an exit to the previous seed, if there is one.
                 if (currentVisitor.PreviousSeed != null && roomSeeds[currentVisitor.PreviousSeed.Position.y, currentVisitor.PreviousSeed.Position.x] != null)
@@ -681,96 +682,5 @@ public class MapGenerator : MonoBehaviour
                 currentVisitor = null;
             }
         }
-
-        Debug.Log("Counter = " + counter);
-        for (int y = 0; y < roomSeeds.GetLength(0); y++)
-        {
-            for (int x = 0; x < roomSeeds.GetLength(1); x++)
-            {
-                if (roomSeeds[y, x] != null)
-                {
-                    Debug.Log(roomSeeds[y, x]);
-                }
-            }
-        }
     }
 }
-
-//RoomSeed[,] roomSeeds = new RoomSeed[48, 48];
-//CriticalPathVisitor currentVisitor = branchStarters.Dequeue();
-//while (currentVisitor != null)
-//{
-//    MoveReport branchMoveReport = null;
-
-//    do
-//    {
-//        VisitReport visitReport = visitor.Visit();
-
-//        if (!visitReport.WasSuccessful)
-//        {
-//            Debug.LogError("Failed to follow critical path.");
-//            return;
-//        }
-
-
-//        RoomSeed currentSeed = new RoomSeed(visitReport.Neighbors.Original.GetPositionAsVector2Int(), currentVisitor.SectionNumber);
-//        if (roomSeeds[currentSeed.Position.y, currentSeed.Position.x] != null)
-//        {
-//            currentSeed = roomSeeds[currentSeed.Position.y, currentSeed.Position.x];
-//        }
-
-//        currentSeed.AddEntrance(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber));
-
-//        //Before we add the new seed, we want to add an exit to the previous seed, if there is one.
-//        RoomSeed previousSeed = currentVisitor.PreviousSeed;
-//        if (previousSeed != null)
-//        {
-//            RoomSeed previousSeedInList = roomSeeds[previousSeed.Position.y, previousSeed.Position.x];
-//            if (previousSeedInList != null)
-//            {
-//                previousSeedInList.AddExit(new TravelData(DirectionsUtil.GetOppositeDirection(currentVisitor.Direction), currentVisitor.SectionNumber));
-//            }
-//        }
-
-//        roomSeeds[currentSeed.Position.y, currentSeed.Position.x] = currentSeed;
-
-//        currentVisitor.PreviousSeed = currentSeed;
-
-//        branchMoveReport = visitor.Move();
-//    } while (!branchMoveReport.VisitorIsDone);
-
-
-//List<RoomSeed> roomSeeds = new List<RoomSeed>();
-//CriticalPathVisitor currentVisitor = branchStarters.Dequeue();
-//int counter = 0;
-//while (currentVisitor != null)
-//{
-//    MoveReport branchMoveReport = null;
-//    List<RoomSeed> currentBranchSeeds = new List<RoomSeed>();
-
-//    do
-//    {
-//        counter++;
-//        VisitReport visitReport = currentVisitor.Visit();
-
-//        if (!visitReport.WasSuccessful)
-//        {
-//            Debug.LogError("Failed to follow critical path.");
-//            return;
-//        }
-
-//        RoomSeed newSeed = new RoomSeed(visitReport.Neighbors.Original.GetPositionAsVector2Int(), currentVisitor.SectionNumber);
-//        newSeed.AddEntrance(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber));
-
-//        //Before we add the new seed, we want to add an exit to the previous seed, if there is one.
-//        if (currentVisitor.PreviousSeed != null)
-//        {
-//            Debug.Log("Setting exit for " + currentVisitor.PreviousSeed.Position + " to " + currentVisitor.Direction);
-//            currentVisitor.PreviousSeed.AddExit(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber));
-//        }
-
-//        currentBranchSeeds.Add(newSeed);
-
-//        currentVisitor.PreviousSeed = newSeed;
-//        branchMoveReport = currentVisitor.MoveOn();
-//    } while (!branchMoveReport.VisitorIsDone);
