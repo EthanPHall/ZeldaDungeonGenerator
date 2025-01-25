@@ -413,9 +413,12 @@ public class CriticalPathVisitor: PixelVisitor
 
             return previousSeed;
         } 
-        set { previousSeed = value; } }
+        set { previousSeed = value; } 
+    }
 
     public CriticalPathVisitor BuildingOffOf { get { return successorOf; } set { successorOf = value; } }
+
+    public bool ReachedBossRoom { get { return reachedBossRoom; } }
 
     public override MoveReport MoveOn()
     {
@@ -604,11 +607,11 @@ public class MapGenerator : MonoBehaviour
         //Now we need to look at the border of the start room and check all of the neighbors for red pixels.
         //If we find one, we mark it down as a branch.
         Queue<CriticalPathVisitor> branchStarters = new Queue<CriticalPathVisitor>();
-        StartRoomBorderVisitor visitor = new StartRoomBorderVisitor(startingPoint, Directions.Top, path);
+        StartRoomBorderVisitor startBorderVisitor = new StartRoomBorderVisitor(startingPoint, Directions.Top, path);
         MoveReport moveReport = null;
         do
         {
-            VisitReport visitReport = visitor.Visit();
+            VisitReport visitReport = startBorderVisitor.Visit();
 
             if (!visitReport.WasSuccessful)
             {
@@ -625,7 +628,7 @@ public class MapGenerator : MonoBehaviour
                 }
             }
 
-            moveReport = visitor.MoveOn();
+            moveReport = startBorderVisitor.MoveOn();
         } while (moveReport == null || !moveReport.VisitorIsDone);
 
         if (branchStarters.Count == 0)
@@ -635,10 +638,79 @@ public class MapGenerator : MonoBehaviour
         }
 
         //Now we need to visit all of the branches and generate the "seeds" that we will use later to 
-        //make some rooms.
+        //make some rooms. Additionally, we need to generate the initial and boss rooms.
         RoomSeed[,] roomSeeds = new RoomSeed[48, 48];
         CriticalPathVisitor currentVisitor = branchStarters.Dequeue();
-        while (currentVisitor != null)
+
+        Vector2Int startRoomCenter = new Vector2Int(-1, -1);//TODO: Turn this and the next bit dealing with the boss room into a method.
+        Vector2Int tempPosition = startingPoint; //StartingPoint is the bottom left corner of the start room.
+        List<Vector2Int> potentialCenters = new List<Vector2Int>();
+        for (int i = 0; i < 9; i++) //The maximum size of the start room square in the path representation is 9x9.
+        {
+            potentialCenters.Add(tempPosition);
+            tempPosition += new Vector2Int(1, 1);
+
+            if(!path.GetPixel(tempPosition.x, tempPosition.y).Equals(Color.white))
+            {
+                break;
+            }
+        }
+
+        if(potentialCenters.Count == 0)
+        {
+            Debug.LogError("No potential centers found for start room");
+            return;
+        }
+        else if(potentialCenters.Count % 2 == 0)
+        {
+            Debug.LogError("The start room has no real center becuase its dimensions are even."); //TODO: There might be a better/more accurate way to do this by using the borderVisitor from earlier to measure the dimensions of the starting room.
+            return;
+        }
+        else
+        {
+            startRoomCenter = potentialCenters[potentialCenters.Count / 2];
+        }
+
+        Vector2Int bossRoomCenter = new Vector2Int(-1, -1);
+        tempPosition = endPoint;
+        potentialCenters.Clear();
+        for (int i = 0; i < 9; i++) //The maximum size of the boss room square in the path representation is 9x9.
+        {
+            potentialCenters.Add(tempPosition);
+            tempPosition += new Vector2Int(1, 1);
+
+            if (!path.GetPixel(tempPosition.x, tempPosition.y).Equals(Color.black))
+            {
+                break;
+            }
+        }
+
+        if (potentialCenters.Count == 0)
+        {
+            Debug.LogError("No potential centers found for boss room");
+            return;
+        }
+        else if (potentialCenters.Count % 2 == 0)
+        {
+            Debug.LogError("The boss room has no real center because its dimensions are even."); //TODO: There might be a better/more accurate way to do this by using the borderVisitor from earlier to measure the dimensions of the starting room.
+            return;
+        }
+        else
+        {
+            bossRoomCenter = potentialCenters[potentialCenters.Count / 2];
+        }
+
+        RoomSeed startRoomSeed = new RoomSeed(startRoomCenter, 0);
+        RoomSeed bossRoomSeed = new RoomSeed(bossRoomCenter, 0);
+        roomSeeds[startRoomCenter.y, startRoomCenter.x] = startRoomSeed;
+        roomSeeds[bossRoomCenter.y, bossRoomCenter.x] = bossRoomSeed;
+
+        foreach (CriticalPathVisitor v in branchStarters)
+        {
+            v.PreviousSeed = startRoomSeed;
+        }
+
+        while (currentVisitor != null)//Now we deal with the critical path.
         {
             MoveReport branchMoveReport = null;
             do
@@ -663,8 +735,13 @@ public class MapGenerator : MonoBehaviour
                 //Before we add the new seed, we want to add an exit to the previous seed, if there is one.
                 if (currentVisitor.PreviousSeed != null && roomSeeds[currentVisitor.PreviousSeed.Position.y, currentVisitor.PreviousSeed.Position.x] != null)
                 {
-                    Debug.Log("Setting exit for " + currentVisitor.PreviousSeed.Position + " to " + currentVisitor.Direction + ". Counter is: " + counter);
                     roomSeeds[currentVisitor.PreviousSeed.Position.y, currentVisitor.PreviousSeed.Position.x].AddExit(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber));
+                }
+
+                if(currentVisitor.ReachedBossRoom)
+                {
+                    newSeed.AddExit(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber));
+                    roomSeeds[bossRoomCenter.y, bossRoomCenter.x].AddEntrance(new TravelData(DirectionsUtil.GetOppositeDirection(currentVisitor.Direction), currentVisitor.SectionNumber));
                 }
 
                 roomSeeds[newSeed.Position.y, newSeed.Position.x] = newSeed;
