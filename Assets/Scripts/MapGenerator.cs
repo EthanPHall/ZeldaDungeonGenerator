@@ -534,6 +534,8 @@ public class MapGenerator : MonoBehaviour
     public bool generateNewMap = false;
     public int usePathsFromLevel = 0;
 
+    public RoomWithOpeningMarks roomVisualPrefab;
+
     private Texture2D[] paths;
 
     private void Start()
@@ -572,14 +574,14 @@ public class MapGenerator : MonoBehaviour
         {
             for (int j = 0; j < path.height; j++)
             {
-                if (path.GetPixel(i, j).Equals(Color.white))
+                if (startingPoint.x == -1 && path.GetPixel(i, j).Equals(Color.white))
                 {
                     //With the way that Texture2D handles coordinates, (0,0) being at the bottom left,
                     //and this algorithm searching from bottom to top, this starting point should be
                     //the bottom left corner of the starting room.
                     startingPoint = new Vector2Int(i, j);
                 }
-                else if (path.GetPixel(i, j).Equals(Color.black))
+                else if (endPoint.x == -1 && path.GetPixel(i, j).Equals(Color.black))
                 {
                     //bottomLeft of the end room
                     endPoint = new Vector2Int(i, j);
@@ -669,6 +671,7 @@ public class MapGenerator : MonoBehaviour
         else
         {
             startRoomCenter = potentialCenters[potentialCenters.Count / 2];
+            Debug.Log(startingPoint);
         }
 
         Vector2Int bossRoomCenter = new Vector2Int(-1, -1);
@@ -705,6 +708,11 @@ public class MapGenerator : MonoBehaviour
         roomSeeds[startRoomCenter.y, startRoomCenter.x] = startRoomSeed;
         roomSeeds[bossRoomCenter.y, bossRoomCenter.x] = bossRoomSeed;
 
+        Debug.Log("Start Room Seed: " + startRoomSeed);
+        Debug.Log("Boss Room Seed: " + bossRoomSeed);
+
+        currentVisitor.PreviousSeed = startRoomSeed;//We dequeued earlier and it's not in the list anymore, so we need to set the current visitor's previous seed manually
+
         foreach (CriticalPathVisitor v in branchStarters)
         {
             v.PreviousSeed = startRoomSeed;
@@ -738,16 +746,16 @@ public class MapGenerator : MonoBehaviour
                     roomSeeds[currentVisitor.PreviousSeed.Position.y, currentVisitor.PreviousSeed.Position.x].AddExit(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber));
                 }
 
-                if(currentVisitor.ReachedBossRoom)
-                {
-                    newSeed.AddExit(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber));
-                    roomSeeds[bossRoomCenter.y, bossRoomCenter.x].AddEntrance(new TravelData(DirectionsUtil.GetOppositeDirection(currentVisitor.Direction), currentVisitor.SectionNumber));
-                }
-
                 roomSeeds[newSeed.Position.y, newSeed.Position.x] = newSeed;
 
                 currentVisitor.PreviousSeed = newSeed;
                 branchMoveReport = currentVisitor.MoveOn();
+
+                if (currentVisitor.ReachedBossRoom)
+                {
+                    newSeed.AddExit(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber));
+                    roomSeeds[bossRoomCenter.y, bossRoomCenter.x].AddEntrance(new TravelData(DirectionsUtil.GetOppositeDirection(currentVisitor.Direction), currentVisitor.SectionNumber));
+                }
             } while (!branchMoveReport.VisitorIsDone);
 
             if (branchStarters.Count > 0)
@@ -757,6 +765,62 @@ public class MapGenerator : MonoBehaviour
             else
             {
                 currentVisitor = null;
+            }
+        }
+
+        InstantiateRoomVisuals(roomSeeds);
+    }
+
+    private void InstantiateRoomVisuals(RoomSeed[,] roomSeeds)
+    {
+        for(int y = 0; y < roomSeeds.GetLength(0); y++)
+        {
+            for(int x = 0; x < roomSeeds.GetLength(1); x++)
+            {
+                if(roomSeeds[y, x] == null)
+                {
+                    continue;
+                }
+
+                GameObject roomVisual = Instantiate(roomVisualPrefab.GameObject(), new Vector3(x, 0, y), Quaternion.identity);
+                RoomWithOpeningMarks room = roomVisual.GetComponent<RoomWithOpeningMarks>();
+                foreach(TravelData entrance in roomSeeds[y, x].Entrances)
+                {
+                    switch (entrance.TravelDirection)
+                    {
+                        case Directions.Top:
+                            room.topOpening = true;
+                            break;
+                        case Directions.Bottom:
+                            room.bottomOpening = true;
+                            break;
+                        case Directions.Left:
+                            room.leftOpening = true;
+                            break;
+                        case Directions.Right:
+                            room.rightOpening = true;
+                            break;
+                    }
+                }
+
+                foreach (TravelData exit in roomSeeds[y, x].Exits)
+                {
+                    switch (exit.TravelDirection)
+                    {
+                        case Directions.Top:
+                            room.topOpening = true;
+                            break;
+                        case Directions.Bottom:
+                            room.bottomOpening = true;
+                            break;
+                        case Directions.Left:
+                            room.leftOpening = true;
+                            break;
+                        case Directions.Right:
+                            room.rightOpening = true;
+                            break;
+                    }
+                }
             }
         }
     }
