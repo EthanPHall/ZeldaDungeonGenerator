@@ -424,6 +424,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   generateNewMap: 1
   usePathsFromLevel: 0
+  chanceToExpandRoom: 0
+  roomMinExpandedWidth: 2
+  roomMaxExpandedWidth: 4
+  roomMinExpandedHeight: 2
+  roomMaxExpandedHeight: 4
   roomVisualPrefab: {fileID: 7898547164531157980, guid: ade2cc8bf1aedd940ab27d9c14724708, type: 3}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:

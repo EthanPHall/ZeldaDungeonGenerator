@@ -489,6 +489,8 @@ public class RoomSeed
     private List<TravelData> entrances = new List<TravelData>();
     private List<TravelData> exits = new List<TravelData>();
     private int sectionNumber;
+    private bool partOfComposite = false;
+
     public RoomSeed(Vector2Int position, int sectionNumber)
     {
         this.position = position;
@@ -501,6 +503,8 @@ public class RoomSeed
 
     public List<TravelData> Exits { get { return exits; } }
 
+    public bool PartOfComposite { get { return partOfComposite; } set { partOfComposite = value; } }
+
     public void AddEntrance(TravelData entrance)
     {
         entrances.Add(entrance);
@@ -510,6 +514,7 @@ public class RoomSeed
     {
         exits.Add(exit);
     }
+
 
     public override string ToString()
     {
@@ -529,10 +534,152 @@ public class RoomSeed
     }
 }
 
+public class RoomSeedComposite: RoomSeed
+{
+    private List<RoomSeed> internalSeeds = new List<RoomSeed>();
+    private int width;
+    private int height;
+
+    public RoomSeedComposite(Vector2Int position, int sectionNumber, int width, int height) : base(position, sectionNumber)
+    {
+        this.width = width;
+        this.height = height;
+    }
+
+    public List<RoomSeed> InternalSeeds { get { return internalSeeds; } }
+
+    public int Width { get { return width; } }
+
+    public int Height { get { return height; } }
+
+    public void AddInternalSeed(RoomSeed seed)
+    {
+        internalSeeds.Add(seed);
+        seed.PartOfComposite = true;
+    }
+
+    private void DetermineOpenings(List<RoomSeed> seeds, Directions direction)
+    {
+        foreach (RoomSeed seed in seeds)
+        {
+            foreach (TravelData exit in seed.Exits)
+            {
+                if (exit.TravelDirection == direction)
+                {
+                    AddExit(new TravelData(direction, exit.SectionNumber));
+                }
+            }
+
+            foreach (TravelData entrance in seed.Entrances)
+            {
+                if (entrance.TravelDirection == direction)
+                {
+                    AddEntrance(new TravelData(direction, entrance.SectionNumber));
+                }
+            }
+        }
+    }
+
+    public void GenerateEntrancesAndExits()
+    {
+        RoomSeed rightMostSeed = null;
+        RoomSeed leftMostSeed = null;
+        RoomSeed topMostSeed = null;
+        RoomSeed bottomMostSeed = null;
+
+        foreach (RoomSeed seed in internalSeeds)
+        {
+            if (rightMostSeed == null || seed.Position.x > rightMostSeed.Position.x)
+            {
+                rightMostSeed = seed;
+            }
+            if (leftMostSeed == null || seed.Position.x < leftMostSeed.Position.x)
+            {
+                leftMostSeed = seed;
+            }
+            if (topMostSeed == null || seed.Position.y > topMostSeed.Position.y)
+            {
+                topMostSeed = seed;
+            }
+            if (bottomMostSeed == null || seed.Position.y < bottomMostSeed.Position.y)
+            {
+                bottomMostSeed = seed;
+            }
+        }
+
+        List<RoomSeed> allRightMostSeeds = new List<RoomSeed>();
+        List<RoomSeed> allLeftMostSeeds = new List<RoomSeed>();
+        List<RoomSeed> allTopMostSeeds = new List<RoomSeed>();
+        List<RoomSeed> allBottomMostSeeds = new List<RoomSeed>();
+
+        foreach (RoomSeed seed in internalSeeds)
+        {
+            if (seed.Position.x == rightMostSeed.Position.x)
+            {
+                allRightMostSeeds.Add(seed);
+            }
+            if (seed.Position.x == leftMostSeed.Position.x)
+            {
+                allLeftMostSeeds.Add(seed);
+            }
+            if (seed.Position.y == topMostSeed.Position.y)
+            {
+                allTopMostSeeds.Add(seed);
+            }
+            if (seed.Position.y == bottomMostSeed.Position.y)
+            {
+                allBottomMostSeeds.Add(seed);
+            }
+        }
+
+        DetermineOpenings(allRightMostSeeds, Directions.Right);
+        DetermineOpenings(allLeftMostSeeds, Directions.Left);
+        DetermineOpenings(allTopMostSeeds, Directions.Top);
+        DetermineOpenings(allBottomMostSeeds, Directions.Bottom);
+    }
+}
+
+public class RoomSeedExpander
+{
+    public RoomSeedExpander()
+    {
+    }
+
+    public RoomSeedComposite ExpandRoom(RoomSeed[,] roomSeeds, int width, int height, Vector2Int startingPosition)
+    {
+        RoomSeedComposite composite = new RoomSeedComposite(startingPosition, roomSeeds[startingPosition.y, startingPosition.x].SectionNumber, width, height);
+
+        int yGoal = Mathf.Clamp(startingPosition.y + height, 0, roomSeeds.GetLength(1));
+        int xGoal = Mathf.Clamp(startingPosition.x + width, 0, roomSeeds.GetLength(0));
+
+        for (int y = startingPosition.y; y < yGoal; y++)
+        {
+            for (int x = startingPosition.x; x < xGoal; x++)
+            {
+                if (roomSeeds[y, x] != null && !roomSeeds[y, x].PartOfComposite)
+                {
+                    composite.AddInternalSeed(roomSeeds[y, x]);
+                }
+            }
+        }
+
+        composite.GenerateEntrancesAndExits();
+
+        return composite;
+    }
+}
+
 public class MapGenerator : MonoBehaviour
 {
     public bool generateNewMap = false;
     public int usePathsFromLevel = 0;
+
+    [Range(0, 100)]
+    public int chanceToExpandRoom = 50;
+    public int roomMinExpandedWidth = 2;
+    public int roomMaxExpandedWidth = 4;
+    public int roomMinExpandedHeight = 2;
+    public int roomMaxExpandedHeight = 4;
 
     public RoomWithOpeningMarks roomVisualPrefab;
 
@@ -642,6 +789,7 @@ public class MapGenerator : MonoBehaviour
         //Now we need to visit all of the branches and generate the "seeds" that we will use later to 
         //make some rooms. Additionally, we need to generate the initial and boss rooms.
         RoomSeed[,] roomSeeds = new RoomSeed[48, 48];
+        List<Vector2Int> criticalPathSeedPositions = new List<Vector2Int>();//Makes the next step after generating the seeds easier.
         CriticalPathVisitor currentVisitor = branchStarters.Dequeue();
 
         Vector2Int startRoomCenter = new Vector2Int(-1, -1);//TODO: Turn this and the next bit dealing with the boss room into a method.
@@ -708,9 +856,6 @@ public class MapGenerator : MonoBehaviour
         roomSeeds[startRoomCenter.y, startRoomCenter.x] = startRoomSeed;
         roomSeeds[bossRoomCenter.y, bossRoomCenter.x] = bossRoomSeed;
 
-        Debug.Log("Start Room Seed: " + startRoomSeed);
-        Debug.Log("Boss Room Seed: " + bossRoomSeed);
-
         currentVisitor.PreviousSeed = startRoomSeed;//We dequeued earlier and it's not in the list anymore, so we need to set the current visitor's previous seed manually
 
         foreach (CriticalPathVisitor v in branchStarters)
@@ -747,6 +892,10 @@ public class MapGenerator : MonoBehaviour
                 }
 
                 roomSeeds[newSeed.Position.y, newSeed.Position.x] = newSeed;
+                if(!criticalPathSeedPositions.Contains(newSeed.Position))
+                {
+                    criticalPathSeedPositions.Add(newSeed.Position);
+                }
 
                 currentVisitor.PreviousSeed = newSeed;
                 branchMoveReport = currentVisitor.MoveOn();
@@ -768,7 +917,85 @@ public class MapGenerator : MonoBehaviour
             }
         }
 
-        InstantiateRoomVisuals(roomSeeds);
+        //InstantiateRoomVisuals(roomSeeds);
+
+        //Grow some of the room seeds and make them encompass some of their fellow seeds.
+        RoomSeedExpander expander = new RoomSeedExpander();
+        List<RoomSeedComposite> roomSeedComposites = new List<RoomSeedComposite>();
+        foreach (Vector2Int position in criticalPathSeedPositions)
+        {
+            if (roomSeeds[position.y, position.x] != null && !roomSeeds[position.y, position.x].PartOfComposite)
+            {
+                int width = 1;
+                int height = 1;
+
+                if(Random.Range(0, 100) < chanceToExpandRoom)
+                {
+                    width = Random.Range(roomMinExpandedWidth, roomMaxExpandedWidth);
+                    height = Random.Range(roomMinExpandedHeight, roomMaxExpandedHeight);
+                }
+                
+                RoomSeedComposite composite = expander.ExpandRoom(roomSeeds, width, height, position);
+                roomSeedComposites.Add(composite);
+            }
+        }
+
+        InstantiateCompositeRoomVisuals(roomSeedComposites);
+        //Display the composite room seeds in the console.
+        foreach (RoomSeedComposite composite in roomSeedComposites)
+        {
+            Debug.Log(composite);
+        }
+    }
+
+    private void InstantiateCompositeRoomVisuals(List<RoomSeedComposite> composites)
+    {
+        foreach (RoomSeedComposite composite in composites)
+        {
+            GameObject roomVisual = Instantiate(roomVisualPrefab.GameObject(), new Vector3(composite.Position.x, 0, composite.Position.y), Quaternion.identity);
+            RoomWithOpeningMarks room = roomVisual.GetComponent<RoomWithOpeningMarks>();
+            room.position = composite.Position;
+            room.width = composite.Width;
+            room.height = composite.Height;
+
+            foreach (TravelData entrance in composite.Entrances)
+            {
+                switch (entrance.TravelDirection)
+                {
+                    case Directions.Top:
+                        room.topOpenings++;
+                        break;
+                    case Directions.Bottom:
+                        room.bottomOpenings++;
+                        break;
+                    case Directions.Left:
+                        room.leftOpenings++;
+                        break;
+                    case Directions.Right:
+                        room.rightOpenings++;
+                        break;
+                }
+            }
+
+            foreach (TravelData exit in composite.Exits)
+            {
+                switch (exit.TravelDirection)
+                {
+                    case Directions.Top:
+                        room.topOpenings++;
+                        break;
+                    case Directions.Bottom:
+                        room.bottomOpenings++;
+                        break;
+                    case Directions.Left:
+                        room.leftOpenings++;
+                        break;
+                    case Directions.Right:
+                        room.rightOpenings++;
+                        break;
+                }
+            }
+        }
     }
 
     private void InstantiateRoomVisuals(RoomSeed[,] roomSeeds)
@@ -789,16 +1016,16 @@ public class MapGenerator : MonoBehaviour
                     switch (entrance.TravelDirection)
                     {
                         case Directions.Top:
-                            room.topOpening = true;
+                            room.topOpenings = 1;
                             break;
                         case Directions.Bottom:
-                            room.bottomOpening = true;
+                            room.bottomOpenings = 1;
                             break;
                         case Directions.Left:
-                            room.leftOpening = true;
+                            room.leftOpenings = 1;
                             break;
                         case Directions.Right:
-                            room.rightOpening = true;
+                            room.rightOpenings = 1;
                             break;
                     }
                 }
@@ -808,16 +1035,16 @@ public class MapGenerator : MonoBehaviour
                     switch (exit.TravelDirection)
                     {
                         case Directions.Top:
-                            room.topOpening = true;
+                            room.topOpenings = 1;
                             break;
                         case Directions.Bottom:
-                            room.bottomOpening = true;
+                            room.bottomOpenings = 1;
                             break;
                         case Directions.Left:
-                            room.leftOpening = true;
+                            room.leftOpenings = 1;
                             break;
                         case Directions.Right:
-                            room.rightOpening = true;
+                            room.rightOpenings = 1;
                             break;
                     }
                 }

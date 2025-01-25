@@ -4,30 +4,37 @@ using UnityEngine;
 
 public class RoomWithOpeningMarks : MonoBehaviour
 {
-    public bool topOpening;
-    public bool bottomOpening;
-    public bool leftOpening;
-    public bool rightOpening;
+    public int topOpenings = 0;
+    public int bottomOpenings = 0;
+    public int leftOpenings = 0;
+    public int rightOpenings = 0;
 
     public GameObject openingMark;
 
+    public int width = 1;
+    public int height = 1;
+    public Vector2Int position = Vector2Int.zero;
+
     void Start()
     {
-        if(topOpening)
+        transform.localScale = new Vector3(width - .5f, .4f, height - .5f);
+        transform.position = new Vector3(position.x + width/2, 0, position.y + height/2);
+
+        for (int i = 0; i < topOpenings; i++)
         {
             Instantiate(openingMark, new Vector3(transform.position.x, transform.position.y, transform.position.z + transform.localScale.z / 2), Quaternion.identity, transform);
         }
-        if (bottomOpening)
+        for(int i = 0; i < bottomOpenings; i++)
         {
             Instantiate(openingMark, new Vector3(transform.position.x, transform.position.y, transform.position.z - transform.localScale.z / 2), Quaternion.identity, transform);
         }
-        if (leftOpening)
+        for (int i = 0; i < leftOpenings; i++)
         {
-            Instantiate(openingMark, new Vector3(transform.position.x - transform.localScale.x / 2, transform.position.y, transform.position.z), Quaternion.Euler(0, 90, 0), transform);
+            Instantiate(openingMark, new Vector3(transform.position.x - transform.localScale.x / 2, transform.position.y, transform.position.z), Quaternion.identity, transform);
         }
-        if (rightOpening)
+        for (int i = 0; i < rightOpenings; i++)
         {
-            Instantiate(openingMark, new Vector3(transform.position.x + transform.localScale.x / 2, transform.position.y, transform.position.z), Quaternion.Euler(0, 90, 0), transform);
+            Instantiate(openingMark, new Vector3(transform.position.x + transform.localScale.x / 2, transform.position.y, transform.position.z), Quaternion.identity, transform);
         }
     }
 
