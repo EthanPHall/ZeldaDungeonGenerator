@@ -633,13 +633,12 @@ public class MapGenerator : MonoBehaviour
 
         //Now we need to visit all of the branches and generate the "seeds" that we will use later to 
         //make some rooms.
-        List<RoomSeed> roomSeeds = new List<RoomSeed>();
+        RoomSeed[,] roomSeeds = new RoomSeed[48, 48];
         CriticalPathVisitor currentVisitor = branchStarters.Dequeue();
         int counter = 0;
         while (currentVisitor != null)
         {
             MoveReport branchMoveReport = null;
-            List<RoomSeed> currentBranchSeeds = new List<RoomSeed>();
 
             do
             {
@@ -653,22 +652,25 @@ public class MapGenerator : MonoBehaviour
                 }
 
                 RoomSeed newSeed = new RoomSeed(visitReport.Neighbors.Original.GetPositionAsVector2Int(), currentVisitor.SectionNumber);
+                if (roomSeeds[newSeed.Position.y, newSeed.Position.x] != null)
+                {
+                    newSeed = roomSeeds[newSeed.Position.y, newSeed.Position.x];
+                }
+
                 newSeed.AddEntrance(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber));
 
                 //Before we add the new seed, we want to add an exit to the previous seed, if there is one.
-                if (currentVisitor.PreviousSeed != null)
+                if (currentVisitor.PreviousSeed != null && roomSeeds[currentVisitor.PreviousSeed.Position.y, currentVisitor.PreviousSeed.Position.x] != null)
                 {
-                    Debug.Log("Setting exit for " + currentVisitor.PreviousSeed.Position + " to " + currentVisitor.Direction);
-                    currentVisitor.PreviousSeed.AddExit(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber));
+                    Debug.Log("Setting exit for " + currentVisitor.PreviousSeed.Position + " to " + currentVisitor.Direction + ". Counter is: " + counter);
+                    roomSeeds[currentVisitor.PreviousSeed.Position.y, currentVisitor.PreviousSeed.Position.x].AddExit(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber));
                 }
 
-                currentBranchSeeds.Add(newSeed);
+                roomSeeds[newSeed.Position.y, newSeed.Position.x] = newSeed;
 
                 currentVisitor.PreviousSeed = newSeed;
                 branchMoveReport = currentVisitor.MoveOn();
             } while (!branchMoveReport.VisitorIsDone);
-
-            roomSeeds.AddRange(currentBranchSeeds);
 
             if (branchStarters.Count > 0)
             {
@@ -681,10 +683,15 @@ public class MapGenerator : MonoBehaviour
         }
 
         Debug.Log("Counter = " + counter);
-        Debug.Log(roomSeeds.Count + " seeds generated");
-        foreach (RoomSeed seed in roomSeeds)
+        for (int y = 0; y < roomSeeds.GetLength(0); y++)
         {
-            Debug.Log(seed.ToString());
+            for (int x = 0; x < roomSeeds.GetLength(1); x++)
+            {
+                if (roomSeeds[y, x] != null)
+                {
+                    Debug.Log(roomSeeds[y, x]);
+                }
+            }
         }
     }
 }
