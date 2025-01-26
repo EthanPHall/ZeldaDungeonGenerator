@@ -466,16 +466,27 @@ public class TravelData
 {
     private Directions travelDirection;
     private int sectionNumber;
+    private Vector2Int position;
 
-    public TravelData(Directions travelDirection, int sectionNumber)
+    private RoomSeed leadsTo = null;
+
+    public TravelData(Directions travelDirection, int sectionNumber, Vector2Int position, RoomSeed leadsTo)
     {
         this.travelDirection = travelDirection;
         this.sectionNumber = sectionNumber;
+        this.position = position;
+        this.leadsTo = leadsTo;
     }
     
     public Directions TravelDirection { get { return travelDirection; } }
 
     public int SectionNumber { get { return sectionNumber; } }
+
+    public RoomSeed LeadsTo { get { return leadsTo; } }
+    public void SetLeadsTo(RoomSeed leadsTo)
+    {
+        this.leadsTo = leadsTo;
+    }
 
     public override string ToString()
     {
@@ -489,7 +500,7 @@ public class RoomSeed
     private List<TravelData> entrances = new List<TravelData>();
     private List<TravelData> exits = new List<TravelData>();
     private int sectionNumber;
-    private bool partOfComposite = false;
+    private RoomSeedComposite partOf = null;
 
     public RoomSeed(Vector2Int position, int sectionNumber)
     {
@@ -503,7 +514,9 @@ public class RoomSeed
 
     public List<TravelData> Exits { get { return exits; } }
 
-    public bool PartOfComposite { get { return partOfComposite; } set { partOfComposite = value; } }
+    public bool PartOfComposite { get { return partOf != null; } }
+
+    public RoomSeedComposite PartOf { get { return partOf; } set { partOf = value; } }
 
     public void AddEntrance(TravelData entrance)
     {
@@ -555,7 +568,7 @@ public class RoomSeedComposite: RoomSeed
     public void AddInternalSeed(RoomSeed seed)
     {
         internalSeeds.Add(seed);
-        seed.PartOfComposite = true;
+        seed.PartOf = this;
     }
 
     private void DetermineOpenings(List<RoomSeed> seeds, Directions direction)
@@ -566,7 +579,7 @@ public class RoomSeedComposite: RoomSeed
             {
                 if (exit.TravelDirection == direction)
                 {
-                    AddExit(new TravelData(direction, exit.SectionNumber));
+                    AddExit(exit);
                 }
             }
 
@@ -574,7 +587,7 @@ public class RoomSeedComposite: RoomSeed
             {
                 if (entrance.TravelDirection == direction)
                 {
-                    AddEntrance(new TravelData(direction, entrance.SectionNumber));
+                    AddEntrance(entrance);
                 }
             }
         }
@@ -673,6 +686,7 @@ public class MapGenerator : MonoBehaviour
 {
     public bool generateNewMap = false;
     public int usePathsFromLevel = 0;
+    public int useRoomsFromLevel = 0;
 
     [Range(0, 100)]
     public int chanceToExpandRoom = 50;
@@ -684,10 +698,13 @@ public class MapGenerator : MonoBehaviour
     public RoomWithOpeningMarks roomVisualPrefab;
 
     private Texture2D[] paths;
+    private RoomVisualizer[] roomVisualizers;
 
     private void Start()
     {
         paths = Resources.LoadAll<Texture2D>("Paths/Level " + usePathsFromLevel + " Paths");
+    
+        roomVisualizers = Resources.LoadAll<RoomVisualizer>("Rooms/Level " + useRoomsFromLevel + " Rooms");
     }
 
     void Update()
@@ -794,10 +811,10 @@ public class MapGenerator : MonoBehaviour
 
         Vector2Int startRoomCenter = new Vector2Int(-1, -1);//TODO: Turn this and the next bit dealing with the boss room into a method.
         Vector2Int tempPosition = startingPoint; //StartingPoint is the bottom left corner of the start room.
-        List<Vector2Int> potentialCenters = new List<Vector2Int>();
+        List<Vector2Int> potentialStartCenters = new List<Vector2Int>();
         for (int i = 0; i < 9; i++) //The maximum size of the start room square in the path representation is 9x9.
         {
-            potentialCenters.Add(tempPosition);
+            potentialStartCenters.Add(tempPosition);
             tempPosition += new Vector2Int(1, 1);
 
             if(!path.GetPixel(tempPosition.x, tempPosition.y).Equals(Color.white))
@@ -806,28 +823,28 @@ public class MapGenerator : MonoBehaviour
             }
         }
 
-        if(potentialCenters.Count == 0)
+        if(potentialStartCenters.Count == 0)
         {
             Debug.LogError("No potential centers found for start room");
             return;
         }
-        else if(potentialCenters.Count % 2 == 0)
+        else if(potentialStartCenters.Count % 2 == 0)
         {
             Debug.LogError("The start room has no real center becuase its dimensions are even."); //TODO: There might be a better/more accurate way to do this by using the borderVisitor from earlier to measure the dimensions of the starting room.
             return;
         }
         else
         {
-            startRoomCenter = potentialCenters[potentialCenters.Count / 2];
+            startRoomCenter = potentialStartCenters[potentialStartCenters.Count / 2];
             Debug.Log(startingPoint);
         }
 
         Vector2Int bossRoomCenter = new Vector2Int(-1, -1);
         tempPosition = endPoint;
-        potentialCenters.Clear();
+        List<Vector2Int> potentialEndCenters = new List<Vector2Int>();
         for (int i = 0; i < 9; i++) //The maximum size of the boss room square in the path representation is 9x9.
         {
-            potentialCenters.Add(tempPosition);
+            potentialEndCenters.Add(tempPosition);
             tempPosition += new Vector2Int(1, 1);
 
             if (!path.GetPixel(tempPosition.x, tempPosition.y).Equals(Color.black))
@@ -836,19 +853,19 @@ public class MapGenerator : MonoBehaviour
             }
         }
 
-        if (potentialCenters.Count == 0)
+        if (potentialEndCenters.Count == 0)
         {
             Debug.LogError("No potential centers found for boss room");
             return;
         }
-        else if (potentialCenters.Count % 2 == 0)
+        else if (potentialEndCenters.Count % 2 == 0)
         {
             Debug.LogError("The boss room has no real center because its dimensions are even."); //TODO: There might be a better/more accurate way to do this by using the borderVisitor from earlier to measure the dimensions of the starting room.
             return;
         }
         else
         {
-            bossRoomCenter = potentialCenters[potentialCenters.Count / 2];
+            bossRoomCenter = potentialEndCenters[potentialEndCenters.Count / 2];
         }
 
         RoomSeed startRoomSeed = new RoomSeed(startRoomCenter, 0);
@@ -876,34 +893,38 @@ public class MapGenerator : MonoBehaviour
                     return;
                 }
 
-                RoomSeed newSeed = new RoomSeed(visitReport.Neighbors.Original.GetPositionAsVector2Int(), currentVisitor.SectionNumber);
-                if (roomSeeds[newSeed.Position.y, newSeed.Position.x] != null)
+                RoomSeed currentSeed = new RoomSeed(visitReport.Neighbors.Original.GetPositionAsVector2Int(), currentVisitor.SectionNumber);
+                if (roomSeeds[currentSeed.Position.y, currentSeed.Position.x] != null)
                 {
-                    newSeed = roomSeeds[newSeed.Position.y, newSeed.Position.x];
+                    currentSeed = roomSeeds[currentSeed.Position.y, currentSeed.Position.x];
                 }
 
-                //We reverse the direction because, for example, the visitor moves to the right, entering the new room from the left.
-                newSeed.AddEntrance(new TravelData(DirectionsUtil.GetOppositeDirection(currentVisitor.Direction), currentVisitor.SectionNumber));
-
-                //Before we add the new seed, we want to add an exit to the previous seed, if there is one.
                 if (currentVisitor.PreviousSeed != null && roomSeeds[currentVisitor.PreviousSeed.Position.y, currentVisitor.PreviousSeed.Position.x] != null)
                 {
-                    roomSeeds[currentVisitor.PreviousSeed.Position.y, currentVisitor.PreviousSeed.Position.x].AddExit(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber));
-                }
+                    //We reverse the direction for the entrance because, for example, the visitor moves to the right, entering the new room from the left.
+                    currentSeed.AddEntrance(new TravelData(DirectionsUtil.GetOppositeDirection(currentVisitor.Direction), currentVisitor.SectionNumber, currentSeed.Position, currentVisitor.PreviousSeed));
 
-                roomSeeds[newSeed.Position.y, newSeed.Position.x] = newSeed;
-                if(!criticalPathSeedPositions.Contains(newSeed.Position))
+                    roomSeeds[currentVisitor.PreviousSeed.Position.y, currentVisitor.PreviousSeed.Position.x].AddExit(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber, currentSeed.Position, currentSeed));
+                }
+                else
                 {
-                    criticalPathSeedPositions.Add(newSeed.Position);
+                    Debug.LogError("No previous seed found for critical path visitor.");
+                    return;
                 }
 
-                currentVisitor.PreviousSeed = newSeed;
+                roomSeeds[currentSeed.Position.y, currentSeed.Position.x] = currentSeed;
+                if(!criticalPathSeedPositions.Contains(currentSeed.Position))
+                {
+                    criticalPathSeedPositions.Add(currentSeed.Position);
+                }
+
+                currentVisitor.PreviousSeed = currentSeed;
                 branchMoveReport = currentVisitor.MoveOn();
 
                 if (currentVisitor.ReachedBossRoom)
                 {
-                    newSeed.AddExit(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber));
-                    roomSeeds[bossRoomCenter.y, bossRoomCenter.x].AddEntrance(new TravelData(DirectionsUtil.GetOppositeDirection(currentVisitor.Direction), currentVisitor.SectionNumber));
+                    currentSeed.AddExit(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber, bossRoomCenter, bossRoomSeed));
+                    roomSeeds[bossRoomCenter.y, bossRoomCenter.x].AddEntrance(new TravelData(DirectionsUtil.GetOppositeDirection(currentVisitor.Direction), currentVisitor.SectionNumber, bossRoomCenter, currentSeed));
                 }
             } while (!branchMoveReport.VisitorIsDone);
 
@@ -922,6 +943,17 @@ public class MapGenerator : MonoBehaviour
         //Grow some of the room seeds and make them encompass some of their fellow seeds.
         RoomSeedExpander expander = new RoomSeedExpander();
         List<RoomSeedComposite> roomSeedComposites = new List<RoomSeedComposite>();
+        RoomSeedComposite startRoomComposite = new RoomSeedComposite(startRoomSeed.Position, startRoomSeed.SectionNumber, potentialStartCenters.Count, potentialStartCenters.Count);
+        RoomSeedComposite bossRoomComposite = new RoomSeedComposite(bossRoomSeed.Position, bossRoomSeed.SectionNumber, potentialEndCenters.Count, potentialEndCenters.Count);
+
+        startRoomComposite.AddInternalSeed(startRoomSeed);
+        bossRoomComposite.AddInternalSeed(bossRoomSeed);
+
+        startRoomComposite.GenerateEntrancesAndExits();
+        bossRoomComposite.GenerateEntrancesAndExits();
+
+        roomSeedComposites.Add(startRoomComposite);
+
         foreach (Vector2Int position in criticalPathSeedPositions)
         {
             if (roomSeeds[position.y, position.x] != null && !roomSeeds[position.y, position.x].PartOfComposite)
@@ -940,19 +972,57 @@ public class MapGenerator : MonoBehaviour
             }
         }
 
-        InstantiateCompositeRoomVisuals(roomSeedComposites);
-        //Display the composite room seeds in the console.
-        foreach (RoomSeedComposite composite in roomSeedComposites)
+        roomSeedComposites.Add(bossRoomComposite);
+
+        //InstantiateCompositeRoomVisuals(roomSeedComposites);
+        ////Display the composite room seeds in the console.
+        //foreach (RoomSeedComposite composite in roomSeedComposites)
+        //{
+        //    Debug.Log(composite);
+        //}
+
+        //Now we need to generate the actual rooms.
+        Stack<RoomSeedComposite> roomSeedStack = new Stack<RoomSeedComposite>();
+        roomSeedStack.Push(startRoomComposite);
+        while(roomSeedStack.Count > 0)
         {
-            Debug.Log(composite);
+            RoomSeedComposite currentComposite = roomSeedStack.Pop();
+            RoomVisualizer room = PickRoom(currentComposite);
+
+            if(room == null)
+            {
+                Debug.LogError("No room found for composite " + currentComposite);
+                return;
+            }
+
+            //Instantiate<RoomVisualizer>()
         }
+    }
+
+    private RoomVisualizer PickRoom(RoomSeedComposite composite)
+    {
+        List<RoomVisualizer> potentialRooms = new List<RoomVisualizer>();
+
+        foreach (RoomVisualizer room in roomVisualizers)
+        {
+            if (room.width == composite.Width && room.height == composite.Height)
+            {
+                return room;
+            }
+        }
+
+        RoomVisualizer roomToReturn = null;
+
+        roomToReturn = potentialRooms[Random.Range(0, potentialRooms.Count)];
+
+        return roomToReturn;
     }
 
     private void InstantiateCompositeRoomVisuals(List<RoomSeedComposite> composites)
     {
         foreach (RoomSeedComposite composite in composites)
         {
-            GameObject roomVisual = Instantiate(roomVisualPrefab.GameObject(), new Vector3(composite.Position.x, 0, composite.Position.y), Quaternion.identity);
+            GameObject roomVisual = Instantiate(roomVisualPrefab.GameObject(), new Vector3(0, 0, 0), Quaternion.identity);
             RoomWithOpeningMarks room = roomVisual.GetComponent<RoomWithOpeningMarks>();
             room.position = composite.Position;
             room.width = composite.Width;

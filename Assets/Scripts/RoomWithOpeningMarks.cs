@@ -18,7 +18,7 @@ public class RoomWithOpeningMarks : MonoBehaviour
     void Start()
     {
         transform.localScale = new Vector3(width - .5f, .4f, height - .5f);
-        transform.position = new Vector3(position.x + width/2, 0, position.y + height/2);
+        transform.position = new Vector3(position.x + width/2f, 0, position.y + height/2f);
 
         for (int i = 0; i < topOpenings; i++)
         {
