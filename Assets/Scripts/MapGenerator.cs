@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.InteropServices.WindowsRuntime;
@@ -16,12 +17,13 @@ public static class Texture2DUtil
     }
 }
 
+[Serializable]
 public class Pixel
 {
-    private bool transparent;
-    private int x;
-    private int y;
-    private Color color;
+    [SerializeField] private bool transparent;
+    [SerializeField] private int x;
+    [SerializeField] private int y;
+    [SerializeField] private Color color;
     public Pixel(int x, int y, Color color)
     {
         this.x = x;
@@ -48,9 +50,14 @@ public class Pixel
         return x == other.x && y == other.y && color.Equals(other.color);
     }
 
-    public Vector2Int GetPositionAsVector2Int()
+    public Vector2Int Position()
     {
         return new Vector2Int(x, y);
+    }
+
+    public override string ToString()
+    {
+        return "Pixel at " + x + ", " + y + " with color " + color;
     }
 }
 
@@ -279,7 +286,7 @@ public abstract class PixelVisitor
 
     public Vector2Int Position { get { return position; } }
     public Directions Direction { get { return direction; } }
-    private PixelNeighbors FindNeighbors(Texture2D path, Vector2Int centralPixel)
+    protected PixelNeighbors FindNeighbors(Texture2D path, Vector2Int centralPixel)
     {
         Pixel original = Texture2DUtil.IsPositionInBounds(path, centralPixel.x, centralPixel.y) ? new Pixel(centralPixel.x, centralPixel.y, path.GetPixel(centralPixel.x, centralPixel.y)) : null;
         if (original == null)
@@ -304,7 +311,7 @@ public abstract class PixelVisitor
         return newNeighbors;
     }
 
-    public VisitReport Visit()
+    public virtual VisitReport Visit()
     {
         currentNeighbors = FindNeighbors(toVisit, position);
         if (currentNeighbors == null) 
@@ -719,7 +726,7 @@ public class MapGenerator : MonoBehaviour
                 return;
             }
 
-            Texture2D path = paths[Random.Range(0, paths.Length)];
+            Texture2D path = paths[UnityEngine.Random.Range(0, paths.Length)];
 
             //log what path was found
             Debug.Log("Path: " + path.name);
@@ -893,7 +900,7 @@ public class MapGenerator : MonoBehaviour
                     return;
                 }
 
-                RoomSeed currentSeed = new RoomSeed(visitReport.Neighbors.Original.GetPositionAsVector2Int(), currentVisitor.SectionNumber);
+                RoomSeed currentSeed = new RoomSeed(visitReport.Neighbors.Original.Position(), currentVisitor.SectionNumber);
                 if (roomSeeds[currentSeed.Position.y, currentSeed.Position.x] != null)
                 {
                     currentSeed = roomSeeds[currentSeed.Position.y, currentSeed.Position.x];
@@ -961,10 +968,10 @@ public class MapGenerator : MonoBehaviour
                 int width = 1;
                 int height = 1;
 
-                if(Random.Range(0, 100) < chanceToExpandRoom)
+                if(UnityEngine.Random.Range(0, 100) < chanceToExpandRoom)
                 {
-                    width = Random.Range(roomMinExpandedWidth, roomMaxExpandedWidth);
-                    height = Random.Range(roomMinExpandedHeight, roomMaxExpandedHeight);
+                    width = UnityEngine.Random.Range(roomMinExpandedWidth, roomMaxExpandedWidth);
+                    height = UnityEngine.Random.Range(roomMinExpandedHeight, roomMaxExpandedHeight);
                 }
                 
                 RoomSeedComposite composite = expander.ExpandRoom(roomSeeds, width, height, position);
@@ -1013,7 +1020,7 @@ public class MapGenerator : MonoBehaviour
 
         RoomVisualizer roomToReturn = null;
 
-        roomToReturn = potentialRooms[Random.Range(0, potentialRooms.Count)];
+        roomToReturn = potentialRooms[UnityEngine.Random.Range(0, potentialRooms.Count)];
 
         return roomToReturn;
     }

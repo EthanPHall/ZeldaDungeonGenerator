@@ -11,6 +11,8 @@ public class GettingFamiliarWithBitmaps : MonoBehaviour
     public GameObject redCube;
     public GameObject greyCube;
 
+    public Collider collider;
+
     // Start is called before the first frame update
     void Start()
     {
