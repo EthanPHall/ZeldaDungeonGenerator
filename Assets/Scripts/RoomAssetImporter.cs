@@ -17,6 +17,8 @@ public class RoomData
     public List<Vector2Int> leftOpenings;
     public List<Vector2Int> rightOpenings;
 
+    public SeedGenWrapper sgwUsedToMakeThis;
+
     public RoomData(int width, int height)
     {
         this.width = width;
@@ -29,9 +31,42 @@ public class RoomData
         rightOpenings = new List<Vector2Int>();
     }
 
+    public RoomData(RoomData roomData)
+    {
+        width = roomData.width;
+        height = roomData.height;
+
+        List<Pixel> deepCopyPixels = new List<Pixel>();
+        foreach (Pixel pixel in roomData.pixels)
+        {
+            deepCopyPixels.Add(new Pixel(pixel));
+        }
+        pixels = deepCopyPixels;
+        
+        topOpenings = new List<Vector2Int>(roomData.topOpenings);
+        bottomOpenings = new List<Vector2Int>(roomData.bottomOpenings);
+        leftOpenings = new List<Vector2Int>(roomData.leftOpenings);
+        rightOpenings = new List<Vector2Int>(roomData.rightOpenings);
+    }
+
     public int Width { get { return width; } }
     public int Height { get { return height; } }
     public List<Pixel> Pixels { get { return pixels; } }
+    public List<Pixel> WallPixels
+    {
+        get
+        {
+            List<Pixel> toReturn = new List<Pixel>();
+            foreach (Pixel pixel in pixels)
+            {
+                if (pixel.Color.Equals(Color.red))
+                {
+                    toReturn.Add(pixel);
+                }
+            }
+            return toReturn;
+        }
+    }
     public List<Vector2Int> TopOpenings { get { return topOpenings; } }
     public List<Vector2Int> BottomOpenings { get { return bottomOpenings; } }
     public List<Vector2Int> LeftOpenings { get { return leftOpenings; } }
@@ -40,6 +75,30 @@ public class RoomData
     public void AddPixel(Pixel pixel)
     {
         pixels.Add(pixel);
+    }
+
+    public void ModifyAllPositions(Vector2Int modifier)
+    {
+        foreach (Pixel pixel in pixels)
+        {
+            pixel.SetPosition(pixel.GetPosition() + modifier);
+        }
+        for (int i = 0; i < topOpenings.Count; i++)
+        {
+            topOpenings[i] += modifier;
+        }
+        for (int i = 0; i < bottomOpenings.Count; i++)
+        {
+            bottomOpenings[i] += modifier;
+        }
+        for (int i = 0; i < leftOpenings.Count; i++)
+        {
+            leftOpenings[i] += modifier;
+        }
+        for (int i = 0; i < rightOpenings.Count; i++)
+        {
+            rightOpenings[i] += modifier;
+        }
     }
 
     public override string ToString()
@@ -198,7 +257,7 @@ public class RoomAssetImporterVisitor : PixelVisitor
     }
 }
 
-[ScriptedImporter(1, "room")]
+[ScriptedImporter(1, "room.png")]
 public class RoomAssetImporter : ScriptedImporter
 {
     public override void OnImportAsset(AssetImportContext ctx)
@@ -230,20 +289,5 @@ public class RoomAssetImporter : ScriptedImporter
 
         ctx.AddObjectToAsset("roomData", roomDataAsset);
         ctx.SetMainObject(roomDataAsset);
-
-        //RoomData readBack = JsonUtility.FromJson<RoomData>(roomDataJSON);
-        //Debug.Log("Read Back Room Data");
-        //Debug.Log(readBack);
-
-        //Debug the image
-        //Debug.Log("Width: " + image.width);
-        //Debug.Log("Height: " + image.height);
-        //for (int i = 0; i < image.width; i++)
-        //{
-        //    for (int j = 0; j < image.height; j++)
-        //    {
-        //        Debug.Log("Color at (" + i + ", " + j + "): " + image.GetPixel(i, j));
-        //    }
-        //}
     }
 }

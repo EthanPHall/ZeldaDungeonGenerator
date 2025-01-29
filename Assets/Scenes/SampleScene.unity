@@ -551,12 +551,13 @@ MonoBehaviour:
   generateNewMap: 1
   usePathsFromLevel: 0
   useRoomsFromLevel: 0
-  chanceToExpandRoom: 0
+  chanceToExpandRoom: 83
   roomMinExpandedWidth: 2
   roomMaxExpandedWidth: 4
   roomMinExpandedHeight: 2
   roomMaxExpandedHeight: 4
   roomVisualPrefab: {fileID: 7898547164531157980, guid: ade2cc8bf1aedd940ab27d9c14724708, type: 3}
+  wallPrefab: {fileID: 3532408704089409363, guid: 9bd69836cf3bc8a42a47a5a74fd820ad, type: 3}
 --- !u!4 &142691045732961215
 Transform:
   m_ObjectHideFlags: 0
@@ -674,7 +675,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!33 &8285743941730311423
 MeshFilter:
   m_ObjectHideFlags: 0

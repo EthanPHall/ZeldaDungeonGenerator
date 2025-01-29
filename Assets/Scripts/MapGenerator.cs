@@ -1,3 +1,4 @@
+using OpenCover.Framework.Model;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -40,6 +41,14 @@ public class Pixel
         }
     }
 
+    public Pixel(Pixel pixel)
+    {
+        x = pixel.x;
+        y = pixel.y;
+        color = pixel.color;
+        transparent = pixel.transparent;
+    }
+
     public int X { get { return x; } }
     public int Y { get { return y; } }
     public Color Color { get { return color; } }
@@ -50,9 +59,15 @@ public class Pixel
         return x == other.x && y == other.y && color.Equals(other.color);
     }
 
-    public Vector2Int Position()
+    public Vector2Int GetPosition()
     {
         return new Vector2Int(x, y);
+    }
+
+    public void SetPosition(Vector2Int position)
+    {
+        x = position.x;
+        y = position.y;
     }
 
     public override string ToString()
@@ -469,30 +484,41 @@ public class CriticalPathVisitor: PixelVisitor
     }
 }
 
-public class TravelData
+[Serializable]
+public class RoomOpening
 {
-    private Directions travelDirection;
-    private int sectionNumber;
-    private Vector2Int position;
+    [SerializeField] private Directions travelDirection;
+    [SerializeField] private int sectionNumber;
+    [SerializeField] private Vector2Int position;
 
-    private RoomSeed leadsTo = null;
+    [SerializeField] private RoomOpening leadsTo = null;
+    [SerializeField] private Vector2Int leadsToPosition = new Vector2Int(-1,-1);
+    [SerializeField] private RoomSeed belongsTo = null;
 
-    public TravelData(Directions travelDirection, int sectionNumber, Vector2Int position, RoomSeed leadsTo)
+    public RoomOpening(Directions travelDirection, int sectionNumber, Vector2Int position)
     {
         this.travelDirection = travelDirection;
         this.sectionNumber = sectionNumber;
         this.position = position;
-        this.leadsTo = leadsTo;
     }
-    
+
+    public Vector2Int Position { get { return position; } }
+
     public Directions TravelDirection { get { return travelDirection; } }
 
     public int SectionNumber { get { return sectionNumber; } }
 
-    public RoomSeed LeadsTo { get { return leadsTo; } }
-    public void SetLeadsTo(RoomSeed leadsTo)
+    public RoomOpening LeadsTo { get { return leadsTo; } }
+    public void SetLeadsTo(RoomOpening leadsTo)
     {
         this.leadsTo = leadsTo;
+        this.leadsToPosition = leadsTo.Position;
+    }
+
+    public RoomSeed BelongsTo { get { return belongsTo; } }
+    public void SetBelongsTo(RoomSeed belongsTo)
+    {
+        this.belongsTo = belongsTo;
     }
 
     public override string ToString()
@@ -501,13 +527,14 @@ public class TravelData
     }
 }
 
+[Serializable]
 public class RoomSeed
 {
-    private Vector2Int position;
-    private List<TravelData> entrances = new List<TravelData>();
-    private List<TravelData> exits = new List<TravelData>();
-    private int sectionNumber;
-    private RoomSeedComposite partOf = null;
+    [SerializeField] private Vector2Int position;
+    [SerializeField] private List<RoomOpening> entrances = new List<RoomOpening>();
+    [SerializeField] private List<RoomOpening> exits = new List<RoomOpening>();
+    [SerializeField] private int sectionNumber;
+    [SerializeField] private RoomSeedComposite partOf = null;
 
     public RoomSeed(Vector2Int position, int sectionNumber)
     {
@@ -517,35 +544,57 @@ public class RoomSeed
     public Vector2Int Position { get { return position; } }
     public int SectionNumber { get { return sectionNumber; } }
 
-    public List<TravelData> Entrances { get { return entrances; } }
+    public List<RoomOpening> Entrances { get { return entrances; } }
 
-    public List<TravelData> Exits { get { return exits; } }
+    public List<RoomOpening> Exits { get { return exits; } }
 
     public bool PartOfComposite { get { return partOf != null; } }
 
-    public RoomSeedComposite PartOf { get { return partOf; } set { partOf = value; } }
+    public virtual RoomSeedComposite PartOf { get { return partOf; } set { partOf = value; } }
 
-    public void AddEntrance(TravelData entrance)
+    public void AddEntrance(RoomOpening entrance)
     {
         entrances.Add(entrance);
+        entrance.SetBelongsTo(this);
     }
 
-    public void AddExit(TravelData exit)
+    public void AddExit(RoomOpening exit)
     {
         exits.Add(exit);
+        exit.SetBelongsTo(this);
+    }
+
+    public List<RoomOpening> GetOpeningsInDirection(Directions direction)
+    {
+        List<RoomOpening> openings = new List<RoomOpening>();
+        foreach (RoomOpening entrance in Entrances)
+        {
+            if (entrance.TravelDirection == direction)
+            {
+                openings.Add(entrance);
+            }
+        }
+        foreach (RoomOpening exit in Exits)
+        {
+            if (exit.TravelDirection == direction)
+            {
+                openings.Add(exit);
+            }
+        }
+        return openings;
     }
 
 
     public override string ToString()
     {
         string entranceString = "Entrances: ";
-        foreach (TravelData entrance in entrances)
+        foreach (RoomOpening entrance in entrances)
         {
             entranceString += entrance.ToString() + ", ";
         }
 
         string exitString = "Exits: ";
-        foreach (TravelData exit in exits)
+        foreach (RoomOpening exit in exits)
         {
             exitString += exit.ToString() + ", ";
         }
@@ -554,11 +603,15 @@ public class RoomSeed
     }
 }
 
+[Serializable]
 public class RoomSeedComposite: RoomSeed
 {
-    private List<RoomSeed> internalSeeds = new List<RoomSeed>();
-    private int width;
-    private int height;
+    [SerializeField] private List<RoomSeed> internalSeeds = new List<RoomSeed>();
+    [SerializeField] private int width;
+    [SerializeField] private int height;
+
+    [SerializeField] private RoomData roomData;
+    [SerializeField] private bool baseRoom = false;
 
     public RoomSeedComposite(Vector2Int position, int sectionNumber, int width, int height) : base(position, sectionNumber)
     {
@@ -572,6 +625,19 @@ public class RoomSeedComposite: RoomSeed
 
     public int Height { get { return height; } }
 
+    public RoomData RoomData { get { return roomData; } set { roomData = value; } }
+
+    public bool HasGeneratedRoomData { get { return roomData != null; } }
+
+    public bool IsBaseRoom { get { return baseRoom; } }
+    public void SetIsBaseRoom(bool isBaseRoom)
+    {
+        baseRoom = isBaseRoom;
+    }
+
+    public override RoomSeedComposite PartOf { get { return this; } set { return; } }
+
+
     public void AddInternalSeed(RoomSeed seed)
     {
         internalSeeds.Add(seed);
@@ -582,19 +648,72 @@ public class RoomSeedComposite: RoomSeed
     {
         foreach (RoomSeed seed in seeds)
         {
-            foreach (TravelData exit in seed.Exits)
+            foreach (RoomOpening exit in seed.Exits)
             {
                 if (exit.TravelDirection == direction)
                 {
                     AddExit(exit);
+
+                    //Reevaluate where the exit leads to.
+                    if (exit.LeadsTo == null)
+                    {
+                        continue;
+                    }
+                    
+                    RoomSeed leadsToRoom = exit.LeadsTo.BelongsTo;
+                    if (leadsToRoom.PartOfComposite)//We need to lead into the composite, not the individual seed.
+                    {
+                        RoomSeedComposite leadsToComposite = leadsToRoom.PartOf;
+                        List<RoomOpening> compositeEntrances = leadsToComposite.GetEntrancesInDirection(direction);
+                        RoomOpening closestCompositeEntrance = null;
+                        foreach(RoomOpening compositeEntrance in compositeEntrances)
+                        {
+                            if (closestCompositeEntrance == null || Vector2Int.Distance(exit.Position, compositeEntrance.Position) < Vector2Int.Distance(seed.Position, closestCompositeEntrance.Position))
+                            {
+                                closestCompositeEntrance = compositeEntrance;
+                            }
+                        }
+
+                        if(closestCompositeEntrance != null)
+                        {
+                            exit.SetLeadsTo(closestCompositeEntrance);
+                            closestCompositeEntrance.SetLeadsTo(exit);
+                        }
+                    }
                 }
             }
 
-            foreach (TravelData entrance in seed.Entrances)
+            foreach (RoomOpening entrance in seed.Entrances)
             {
                 if (entrance.TravelDirection == direction)
                 {
                     AddEntrance(entrance);
+
+                    //Reevaluate where the entrance leads to.
+                    if (entrance.LeadsTo == null)
+                    {
+                        continue;
+                    }
+
+                    RoomSeed leadsToRoom = entrance.LeadsTo.BelongsTo;
+                    if (leadsToRoom.PartOfComposite)//We need to lead into the composite, not the individual seed.
+                    {
+                        RoomSeedComposite leadsToComposite = leadsToRoom.PartOf;
+                        List<RoomOpening> compositeExits = leadsToComposite.GetExitsInDirection(direction);
+                        RoomOpening closestCompositeExit = null;
+                        foreach (RoomOpening compositeExit in compositeExits)
+                        {
+                            if (closestCompositeExit == null || Vector2Int.Distance(entrance.Position, compositeExit.Position) < Vector2Int.Distance(seed.Position, closestCompositeExit.Position))
+                            {
+                                closestCompositeExit = compositeExit;
+                            }
+                        }
+                        if (closestCompositeExit != null)
+                        {
+                            entrance.SetLeadsTo(closestCompositeExit);
+                            closestCompositeExit.SetLeadsTo(entrance);
+                        }
+                    }
                 }
             }
         }
@@ -657,6 +776,34 @@ public class RoomSeedComposite: RoomSeed
         DetermineOpenings(allTopMostSeeds, Directions.Top);
         DetermineOpenings(allBottomMostSeeds, Directions.Bottom);
     }
+
+    //TODO: This could probably be done in the function(s) that actually generates the exit and entrance data.
+    //Just have some local variable lists that get populated in those other functions.
+    public List<RoomOpening> GetExitsInDirection(Directions direction)
+    {
+        List<RoomOpening> exits = new List<RoomOpening>();
+        foreach (RoomOpening exit in Exits)
+        {
+            if (exit.TravelDirection == direction)
+            {
+                exits.Add(exit);
+            }
+        }
+        return exits;
+    }
+
+    public List<RoomOpening> GetEntrancesInDirection(Directions direction)
+    {
+        List<RoomOpening> entrances = new List<RoomOpening>();
+        foreach (RoomOpening entrance in Entrances)
+        {
+            if (entrance.TravelDirection == direction)
+            {
+                entrances.Add(entrance);
+            }
+        }
+        return entrances;
+    }
 }
 
 public class RoomSeedExpander
@@ -672,9 +819,9 @@ public class RoomSeedExpander
         int yGoal = Mathf.Clamp(startingPosition.y + height, 0, roomSeeds.GetLength(1));
         int xGoal = Mathf.Clamp(startingPosition.x + width, 0, roomSeeds.GetLength(0));
 
-        for (int y = startingPosition.y; y < yGoal; y++)
+        for (int y = startingPosition.y; y <= yGoal; y++)
         {
-            for (int x = startingPosition.x; x < xGoal; x++)
+            for (int x = startingPosition.x; x <= xGoal; x++)
             {
                 if (roomSeeds[y, x] != null && !roomSeeds[y, x].PartOfComposite)
                 {
@@ -704,14 +851,31 @@ public class MapGenerator : MonoBehaviour
 
     public RoomWithOpeningMarks roomVisualPrefab;
 
+    public GameObject wallPrefab;
+
     private Texture2D[] paths;
-    private RoomVisualizer[] roomVisualizers;
+    private List<RoomData> baseRooms = new List<RoomData>();
 
     private void Start()
     {
         paths = Resources.LoadAll<Texture2D>("Paths/Level " + usePathsFromLevel + " Paths");
-    
-        roomVisualizers = Resources.LoadAll<RoomVisualizer>("Rooms/Level " + useRoomsFromLevel + " Rooms");
+
+        TextAsset[] baseRoomTexts = Resources.LoadAll<TextAsset>("Rooms/Level " + useRoomsFromLevel + " Rooms");
+
+        foreach (TextAsset roomText in baseRoomTexts)
+        {
+            RoomData roomData = JsonUtility.FromJson<RoomData>(roomText.text);
+
+            if (roomData != null)
+            {
+                baseRooms.Add(roomData);
+            }
+        }
+
+        if (baseRooms.Count == 0)
+        {
+            Debug.LogError("No base rooms found in level " + useRoomsFromLevel);
+        }
     }
 
     void Update()
@@ -900,7 +1064,7 @@ public class MapGenerator : MonoBehaviour
                     return;
                 }
 
-                RoomSeed currentSeed = new RoomSeed(visitReport.Neighbors.Original.Position(), currentVisitor.SectionNumber);
+                RoomSeed currentSeed = new RoomSeed(visitReport.Neighbors.Original.GetPosition(), currentVisitor.SectionNumber);
                 if (roomSeeds[currentSeed.Position.y, currentSeed.Position.x] != null)
                 {
                     currentSeed = roomSeeds[currentSeed.Position.y, currentSeed.Position.x];
@@ -909,9 +1073,13 @@ public class MapGenerator : MonoBehaviour
                 if (currentVisitor.PreviousSeed != null && roomSeeds[currentVisitor.PreviousSeed.Position.y, currentVisitor.PreviousSeed.Position.x] != null)
                 {
                     //We reverse the direction for the entrance because, for example, the visitor moves to the right, entering the new room from the left.
-                    currentSeed.AddEntrance(new TravelData(DirectionsUtil.GetOppositeDirection(currentVisitor.Direction), currentVisitor.SectionNumber, currentSeed.Position, currentVisitor.PreviousSeed));
+                    RoomOpening entrance = new RoomOpening(DirectionsUtil.GetOppositeDirection(currentVisitor.Direction), currentVisitor.SectionNumber, currentSeed.Position);
+                    RoomOpening exit = new RoomOpening(currentVisitor.Direction, currentVisitor.SectionNumber, currentVisitor.PreviousSeed.Position);
+                    entrance.SetLeadsTo(exit);
+                    exit.SetLeadsTo(entrance);
 
-                    roomSeeds[currentVisitor.PreviousSeed.Position.y, currentVisitor.PreviousSeed.Position.x].AddExit(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber, currentSeed.Position, currentSeed));
+                    currentSeed.AddEntrance(entrance);
+                    roomSeeds[currentVisitor.PreviousSeed.Position.y, currentVisitor.PreviousSeed.Position.x].AddExit(exit);
                 }
                 else
                 {
@@ -930,8 +1098,13 @@ public class MapGenerator : MonoBehaviour
 
                 if (currentVisitor.ReachedBossRoom)
                 {
-                    currentSeed.AddExit(new TravelData(currentVisitor.Direction, currentVisitor.SectionNumber, bossRoomCenter, bossRoomSeed));
-                    roomSeeds[bossRoomCenter.y, bossRoomCenter.x].AddEntrance(new TravelData(DirectionsUtil.GetOppositeDirection(currentVisitor.Direction), currentVisitor.SectionNumber, bossRoomCenter, currentSeed));
+                    RoomOpening entrance = new RoomOpening(DirectionsUtil.GetOppositeDirection(currentVisitor.Direction), currentVisitor.SectionNumber, currentSeed.Position);
+                    RoomOpening exit = new RoomOpening(currentVisitor.Direction, currentVisitor.SectionNumber, bossRoomCenter);
+                    entrance.SetLeadsTo(exit);
+                    exit.SetLeadsTo(entrance);
+
+                    currentSeed.AddExit(exit);
+                    roomSeeds[bossRoomCenter.y, bossRoomCenter.x].AddEntrance(entrance);
                 }
             } while (!branchMoveReport.VisitorIsDone);
 
@@ -981,151 +1154,352 @@ public class MapGenerator : MonoBehaviour
 
         roomSeedComposites.Add(bossRoomComposite);
 
-        //InstantiateCompositeRoomVisuals(roomSeedComposites);
-        ////Display the composite room seeds in the console.
-        //foreach (RoomSeedComposite composite in roomSeedComposites)
-        //{
-        //    Debug.Log(composite);
-        //}
+        //---------------- Now we need to generate the actual rooms. ----------------
+        bool[,] generatedRoomsRepresentation = new bool[1000, 1000];
+        Stack<SeedGenWrapper> roomSeedStack = new Stack<SeedGenWrapper>();
+        List<SeedGenWrapper> debugSeedStack = new List<SeedGenWrapper>();
+        List<RoomData> generatedRooms = new List<RoomData>();
 
-        //Now we need to generate the actual rooms.
-        Stack<RoomSeedComposite> roomSeedStack = new Stack<RoomSeedComposite>();
-        roomSeedStack.Push(startRoomComposite);
-        while(roomSeedStack.Count > 0)
+        roomSeedStack.Push(new SeedGenWrapper(startRoomComposite, null, null));
+        while (roomSeedStack.Count > 0)
         {
-            RoomSeedComposite currentComposite = roomSeedStack.Pop();
-            RoomVisualizer room = PickRoom(currentComposite);
+            SeedGenWrapper currentSGW = roomSeedStack.Pop();
+            debugSeedStack.Add(currentSGW);
 
-            if(room == null)
+            RoomSeedComposite previousSeed = currentSGW.exitLeadingToThisSeed == null ? null : currentSGW.exitLeadingToThisSeed.BelongsTo.PartOf;
+
+            //Is the current room seed a base room or a connector room?
+            List<SeedGenWrapper> nextSeeds = new List<SeedGenWrapper>();
+            bool atLeastOneNextRoomExists = false;
+            foreach (RoomOpening exit in currentSGW.thisSeed.Exits)
             {
-                Debug.LogError("No room found for composite " + currentComposite);
-                return;
-            }
-
-            //Instantiate<RoomVisualizer>()
-        }
-    }
-
-    private RoomVisualizer PickRoom(RoomSeedComposite composite)
-    {
-        List<RoomVisualizer> potentialRooms = new List<RoomVisualizer>();
-
-        foreach (RoomVisualizer room in roomVisualizers)
-        {
-            if (room.width == composite.Width && room.height == composite.Height)
-            {
-                return room;
-            }
-        }
-
-        RoomVisualizer roomToReturn = null;
-
-        roomToReturn = potentialRooms[UnityEngine.Random.Range(0, potentialRooms.Count)];
-
-        return roomToReturn;
-    }
-
-    private void InstantiateCompositeRoomVisuals(List<RoomSeedComposite> composites)
-    {
-        foreach (RoomSeedComposite composite in composites)
-        {
-            GameObject roomVisual = Instantiate(roomVisualPrefab.GameObject(), new Vector3(0, 0, 0), Quaternion.identity);
-            RoomWithOpeningMarks room = roomVisual.GetComponent<RoomWithOpeningMarks>();
-            room.position = composite.Position;
-            room.width = composite.Width;
-            room.height = composite.Height;
-
-            foreach (TravelData entrance in composite.Entrances)
-            {
-                switch (entrance.TravelDirection)
+                if (exit.LeadsTo != null)
                 {
-                    case Directions.Top:
-                        room.topOpenings++;
-                        break;
-                    case Directions.Bottom:
-                        room.bottomOpenings++;
-                        break;
-                    case Directions.Left:
-                        room.leftOpenings++;
-                        break;
-                    case Directions.Right:
-                        room.rightOpenings++;
-                        break;
-                }
-            }
-
-            foreach (TravelData exit in composite.Exits)
-            {
-                switch (exit.TravelDirection)
-                {
-                    case Directions.Top:
-                        room.topOpenings++;
-                        break;
-                    case Directions.Bottom:
-                        room.bottomOpenings++;
-                        break;
-                    case Directions.Left:
-                        room.leftOpenings++;
-                        break;
-                    case Directions.Right:
-                        room.rightOpenings++;
-                        break;
-                }
-            }
-        }
-    }
-
-    private void InstantiateRoomVisuals(RoomSeed[,] roomSeeds)
-    {
-        for(int y = 0; y < roomSeeds.GetLength(0); y++)
-        {
-            for(int x = 0; x < roomSeeds.GetLength(1); x++)
-            {
-                if(roomSeeds[y, x] == null)
-                {
-                    continue;
-                }
-
-                GameObject roomVisual = Instantiate(roomVisualPrefab.GameObject(), new Vector3(x, 0, y), Quaternion.identity);
-                RoomWithOpeningMarks room = roomVisual.GetComponent<RoomWithOpeningMarks>();
-                foreach(TravelData entrance in roomSeeds[y, x].Entrances)
-                {
-                    switch (entrance.TravelDirection)
+                    if (exit.LeadsTo.BelongsTo.PartOf.HasGeneratedRoomData)
                     {
-                        case Directions.Top:
-                            room.topOpenings = 1;
-                            break;
-                        case Directions.Bottom:
-                            room.bottomOpenings = 1;
-                            break;
-                        case Directions.Left:
-                            room.leftOpenings = 1;
-                            break;
-                        case Directions.Right:
-                            room.rightOpenings = 1;
-                            break;
+                        atLeastOneNextRoomExists = true;
                     }
-                }
-
-                foreach (TravelData exit in roomSeeds[y, x].Exits)
-                {
-                    switch (exit.TravelDirection)
+                    else
                     {
-                        case Directions.Top:
-                            room.topOpenings = 1;
-                            break;
-                        case Directions.Bottom:
-                            room.bottomOpenings = 1;
-                            break;
-                        case Directions.Left:
-                            room.leftOpenings = 1;
-                            break;
-                        case Directions.Right:
-                            room.rightOpenings = 1;
-                            break;
+                        nextSeeds.Add(new SeedGenWrapper(exit.LeadsTo.BelongsTo.PartOf, exit, currentSGW));
                     }
                 }
             }
+
+            if (atLeastOneNextRoomExists)
+            {
+                currentSGW.thisSeed.SetIsBaseRoom(false);
+            }
+            else
+            {
+                currentSGW.thisSeed.SetIsBaseRoom(true);
+            }
+
+            if (currentSGW.thisSeed.IsBaseRoom)
+            {
+                //Debug.Log("Base room");
+
+                //Now we need to find the base room templates that are compatible with the current room seed.
+                List<RoomData> compatibleRooms = new List<RoomData>();
+                foreach (RoomData baseRoom in baseRooms)
+                {
+                    if
+                    (
+                        currentSGW.thisSeed.GetOpeningsInDirection(Directions.Top).Count == baseRoom.TopOpenings.Count &&
+                        currentSGW.thisSeed.GetOpeningsInDirection(Directions.Bottom).Count == baseRoom.BottomOpenings.Count &&
+                        currentSGW.thisSeed.GetOpeningsInDirection(Directions.Left).Count == baseRoom.LeftOpenings.Count &&
+                        currentSGW.thisSeed.GetOpeningsInDirection(Directions.Right).Count == baseRoom.RightOpenings.Count
+                    )
+                    {
+                        compatibleRooms.Add(baseRoom);
+                    }
+                }
+
+                if(compatibleRooms.Count == 0)
+                {
+                    Debug.LogError("No compatible rooms found for seed: ");
+                    Debug.LogError(currentSGW.thisSeed);
+                    break;
+                }
+
+                //Shuffle the compatible rooms list
+                for (int i = 0; i < compatibleRooms.Count; i++)
+                {
+                    RoomData temp = compatibleRooms[i];
+                    int randomIndex = UnityEngine.Random.Range(i, compatibleRooms.Count);
+                    compatibleRooms[i] = compatibleRooms[randomIndex];
+                    compatibleRooms[randomIndex] = temp;
+                }
+
+                //Now we see if any of the potentially compatible rooms will actually fit into the map.
+                foreach (RoomData potentialRoomBase in compatibleRooms)
+                {
+                    RoomData potentialRoomClone = new RoomData(potentialRoomBase);
+
+                    //What opening, if any, does this room need to connect to the previous room?
+                    RoomOpening exitToThis = currentSGW.exitLeadingToThisSeed;
+                    RoomOpening entranceToPrevious = exitToThis == null ? null : exitToThis.LeadsTo;
+
+
+                    if (entranceToPrevious == null)
+                    {
+                        //Debug.Log("Looking at start potential room: " + potentialRoomClone);
+                        //Debug.Log("-----------------");
+
+                        //We must be looking at the start room, which we place by using the starting point from a while ago,
+                        //taking into account that the room representation is much larger than the path representation.
+                        Vector2Int roomPosition = new Vector2Int(startingPoint.x * 20, startingPoint.y * 20);//TODO: Remove magic numbers, not just from here.
+                        potentialRoomClone.ModifyAllPositions(roomPosition);
+                        
+                        //Debug.Log("Potential room after modification: " + potentialRoomClone);
+                    }
+                    else
+                    {
+                        //Debug.Log("Looking at non-start potential room: " + potentialRoomClone);
+                        //Debug.Log("-----------------");
+
+                        //We're looking at a non-start room here, so we need to position it so that the proper exit of the previous room
+                        //lines up with the proper entrance of this room.
+
+                        //Which exit of the previous RoomData are we going to use?
+                        Vector2Int properExit = currentSGW.previousSGW.alignment.GetCorrespondingDataOpening(currentSGW.exitLeadingToThisSeed);
+
+                        //Which entrance of the current RoomData are we going to use?
+                        RoomSeedRoomDataAligner alignment = new RoomSeedRoomDataAligner(currentSGW.thisSeed, potentialRoomClone);
+                        Vector2Int properEntrance = alignment.GetCorrespondingDataOpening(entranceToPrevious);
+
+                        //Position the potential room so that the proper exit of the previous room lines up with the proper entrance of this room.
+                        Vector2Int roomPosition = properExit - properEntrance;
+                        roomPosition += DirectionsUtil.GetDirectionVector(exitToThis.TravelDirection);//Add an offset to keep rooms from overlapping at an edge.
+                        potentialRoomClone.ModifyAllPositions(roomPosition);
+                        properEntrance += roomPosition;
+
+                        //Debug.Log("Potential room after modification: " + potentialRoomClone);
+                        Debug.Log("-------------------");
+                        Debug.Log("Proper exit: " + properExit);
+                        Debug.Log("Proper entrance: " + properEntrance);
+                        Debug.Log("-------------------");
+                    }
+
+                    //We've placed the room, now we need to check if it overlaps with any other rooms.
+                    bool overlaps = false;
+                    foreach (Pixel pixel in potentialRoomClone.Pixels)
+                    {
+                        if (generatedRoomsRepresentation[pixel.Y, pixel.X])
+                        {
+                            //overlaps = true;
+                            //break;
+                        }
+                    }
+
+
+                    if (!overlaps)
+                    {
+                        foreach (Pixel pixel in potentialRoomClone.Pixels)
+                        {
+                            generatedRoomsRepresentation[pixel.Y, pixel.X] = true;
+                        }
+                        currentSGW.thisSeed.RoomData = potentialRoomClone;
+                        currentSGW.SetAssociatedRoom(potentialRoomClone);
+
+                        potentialRoomClone.sgwUsedToMakeThis = currentSGW;
+                        generatedRooms.Add(potentialRoomClone);
+
+                        //We found and placed a valid room, so we're done looking at potential rooms.
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                //Debug.Log("Connector room");
+                break;//TODO: Implement connector rooms.
+            }
+
+            if (currentSGW.thisSeed.RoomData == null)
+            {
+                Debug.LogError("Failed to place a room: ");
+                Debug.LogError(currentSGW.thisSeed);
+                break;
+            }
+
+            foreach (SeedGenWrapper nextSeed in nextSeeds)
+            {
+                roomSeedStack.Push(nextSeed);
+            }
         }
+
+        //Generate the walls
+        int roomCounter = 0;
+        foreach (RoomData room in generatedRooms)
+        {
+            GameObject roomParent = new GameObject("Room " + roomCounter);
+            roomParent.AddComponent<RoomDebugData>();
+            //roomParent.GetComponent<RoomDebugData>().roomData = room;
+            //roomParent.GetComponent<RoomDebugData>().sgw = room.sgwUsedToMakeThis;
+            foreach(RoomOpening opening in room.sgwUsedToMakeThis.thisSeed.Exits)
+            {
+                if (opening.LeadsTo != null)
+                {
+                    roomParent.GetComponent<RoomDebugData>().exits.Add(opening);
+                }
+            }
+
+            foreach (RoomOpening opening in room.sgwUsedToMakeThis.thisSeed.Entrances)
+            {
+                if (opening.LeadsTo != null)
+                {
+                    roomParent.GetComponent<RoomDebugData>().entrances.Add(opening);
+                }
+            }
+
+            roomParent.transform.position = new Vector3(room.WallPixels[0].X, 0, room.WallPixels[0].Y);
+            //Instantiate(roomParent);
+
+            foreach (Pixel pixel in room.WallPixels)
+            {
+                Instantiate(wallPrefab, new Vector3(pixel.X, 0, pixel.Y), Quaternion.identity, roomParent.transform);
+            }
+
+            roomCounter++;
+        }
+
+        Debug.Log("--------------- Composite Seeds: -------------------");
+        int counter = 0;
+        foreach (SeedGenWrapper sgw in debugSeedStack)
+        {
+            Debug.Log(counter + ": " + sgw.thisSeed);
+            counter++;
+        }
+        Debug.Log("-------------------- End Composite Seeds ---------------------");
+    }
+}
+
+[Serializable]
+public class CorrespondingOpenings
+{
+    [SerializeField] private RoomOpening seedOpening;
+    [SerializeField] private Vector2Int dataOpening;
+
+    public CorrespondingOpenings(RoomOpening seedOpening, Vector2Int dataOpening)
+    {
+        this.seedOpening = seedOpening;
+        this.dataOpening = dataOpening;
+    }
+
+    public RoomOpening SeedOpening { get { return seedOpening; } }
+
+    public Vector2Int DataOpening { get { return dataOpening; } }
+}
+
+
+[Serializable]
+public class RoomSeedRoomDataAligner
+{
+    [SerializeField] private RoomSeed seed;
+    [SerializeField] private RoomData roomData;
+
+    [SerializeField] private List<CorrespondingOpenings> correspondingOpenings = new List<CorrespondingOpenings>();
+
+    public RoomSeedRoomDataAligner(RoomSeed seed, RoomData roomData)
+    {
+        this.seed = seed;
+        this.roomData = roomData;
+
+        //Generate corresponding top openings
+        List<Vector2Int> topDataOpenings = new List<Vector2Int>(roomData.TopOpenings);
+        topDataOpenings.Sort((a, b) => a.x.CompareTo(b.x));//Direction of sort doesn't really matter as long as it's consistent.
+
+        List<RoomOpening> topSeedOpenings = new List<RoomOpening>(seed.GetOpeningsInDirection(Directions.Top));
+        topSeedOpenings.Sort((a, b) => a.Position.x.CompareTo(b.Position.x));
+
+        for (int i = 0; i < topDataOpenings.Count; i++)
+        {
+            correspondingOpenings.Add(new CorrespondingOpenings(topSeedOpenings[i], topDataOpenings[i]));
+        }
+
+        //Generate corresponding bottom openings
+        List<Vector2Int> bottomDataOpenings = new List<Vector2Int>(roomData.BottomOpenings);
+        bottomDataOpenings.Sort((a, b) => a.x.CompareTo(b.x));
+
+        List<RoomOpening> bottomSeedOpenings = new List<RoomOpening>(seed.GetOpeningsInDirection(Directions.Bottom));
+        bottomSeedOpenings.Sort((a, b) => a.Position.x.CompareTo(b.Position.x));
+
+        for (int i = 0; i < bottomDataOpenings.Count; i++)
+        {
+            correspondingOpenings.Add(new CorrespondingOpenings(bottomSeedOpenings[i], bottomDataOpenings[i]));
+        }
+
+        //Generate corresponding left openings
+        List<Vector2Int> leftDataOpenings = new List<Vector2Int>(roomData.LeftOpenings);
+        leftDataOpenings.Sort((a, b) => a.y.CompareTo(b.y));
+
+        List<RoomOpening> leftSeedOpenings = new List<RoomOpening>(seed.GetOpeningsInDirection(Directions.Left));
+        leftSeedOpenings.Sort((a, b) => a.Position.y.CompareTo(b.Position.y));
+
+        for (int i = 0; i < leftDataOpenings.Count; i++)
+        {
+            correspondingOpenings.Add(new CorrespondingOpenings(leftSeedOpenings[i], leftDataOpenings[i]));
+        }
+
+        //Generate corresponding right openings
+        List<Vector2Int> rightDataOpenings = new List<Vector2Int>(roomData.RightOpenings);
+        rightDataOpenings.Sort((a, b) => a.y.CompareTo(b.y));
+
+        List<RoomOpening> rightSeedOpenings = new List<RoomOpening>(seed.GetOpeningsInDirection(Directions.Right));
+        rightSeedOpenings.Sort((a, b) => a.Position.y.CompareTo(b.Position.y));
+
+        for (int i = 0; i < rightDataOpenings.Count; i++)
+        {
+            correspondingOpenings.Add(new CorrespondingOpenings(rightSeedOpenings[i], rightDataOpenings[i]));
+        }
+    }
+
+    public Vector2Int GetCorrespondingDataOpening(RoomOpening seedOpening)
+    {
+        foreach (CorrespondingOpenings co in correspondingOpenings)
+        {
+            if (co.SeedOpening == seedOpening)
+            {
+                return co.DataOpening;
+            }
+        }
+        return new Vector2Int(-1, -1);
+    }
+
+    public RoomOpening GetCorrespondingRoomOpening(Vector2Int dataOpening)
+    {
+        foreach (CorrespondingOpenings co in correspondingOpenings)
+        {
+            if (co.DataOpening == dataOpening)
+            {
+                return co.SeedOpening;
+            }
+        }
+        return null;
+    }
+}
+
+[Serializable]
+public class SeedGenWrapper
+{
+    public RoomSeedComposite thisSeed;
+    public RoomData associatedRoom;
+    public RoomOpening exitLeadingToThisSeed;
+    public RoomSeedRoomDataAligner alignment;
+
+    public SeedGenWrapper previousSGW;
+
+    public SeedGenWrapper(RoomSeedComposite thisSeed, RoomOpening exitLeadingToThisSeed, SeedGenWrapper previousSGW)
+    {
+        this.thisSeed = thisSeed;
+        this.exitLeadingToThisSeed = exitLeadingToThisSeed;
+        this.previousSGW = previousSGW;
+    }
+
+    public void SetAssociatedRoom(RoomData associatedRoom)
+    {
+        this.associatedRoom = associatedRoom;
+        this.alignment = new RoomSeedRoomDataAligner(thisSeed, associatedRoom);
     }
 }
