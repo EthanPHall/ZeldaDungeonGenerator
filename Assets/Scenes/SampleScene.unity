@@ -551,7 +551,7 @@ MonoBehaviour:
   generateNewMap: 1
   usePathsFromLevel: 0
   useRoomsFromLevel: 0
-  chanceToExpandRoom: 83
+  chanceToExpandRoom: 76
   roomMinExpandedWidth: 2
   roomMaxExpandedWidth: 4
   roomMinExpandedHeight: 2

@@ -762,11 +762,11 @@ public class RoomSeedComposite: RoomSeed
 
             if (topMostSeed != null)
             {
-                allRightMostSeeds.Add(topMostSeed);
+                allTopMostSeeds.Add(topMostSeed);
             }
             if (bottomMostSeed != null)
             {
-                allLeftMostSeeds.Add(bottomMostSeed);
+                allBottomMostSeeds.Add(bottomMostSeed);
             }
         }
 
@@ -790,11 +790,11 @@ public class RoomSeedComposite: RoomSeed
             }
             if (rightMostSeed != null)
             {
-                allTopMostSeeds.Add(rightMostSeed);
+                allRightMostSeeds.Add(rightMostSeed);
             }
             if (leftMostSeed != null)
             {
-                allBottomMostSeeds.Add(leftMostSeed);
+                allLeftMostSeeds.Add(leftMostSeed);
             }
         }
 
@@ -1196,6 +1196,8 @@ public class MapGenerator : MonoBehaviour
 
             RoomSeedComposite previousSeed = currentSGW.exitLeadingToThisSeed == null ? null : currentSGW.exitLeadingToThisSeed.BelongsTo.PartOf;
 
+            bool overlaps = false;
+
             //Is the current room seed a base room or a connector room?
             List<SeedGenWrapper> nextSeeds = new List<SeedGenWrapper>();
             bool atLeastOneNextRoomExists = false;
@@ -1268,6 +1270,8 @@ public class MapGenerator : MonoBehaviour
                     RoomOpening exitToThis = currentSGW.exitLeadingToThisSeed;
                     RoomOpening entranceToPrevious = exitToThis == null ? null : exitToThis.LeadsTo;
 
+                    Vector2Int properExit = new Vector2Int(-1,-1);
+                    Vector2Int properEntrance = new Vector2Int(-1,-1);
 
                     if (entranceToPrevious == null)
                     {
@@ -1290,11 +1294,11 @@ public class MapGenerator : MonoBehaviour
                         //lines up with the proper entrance of this room.
 
                         //Which exit of the previous RoomData are we going to use?
-                        Vector2Int properExit = currentSGW.previousSGW.alignment.GetCorrespondingDataOpening(currentSGW.exitLeadingToThisSeed);
+                        properExit = currentSGW.previousSGW.alignment.GetCorrespondingDataOpening(currentSGW.exitLeadingToThisSeed);
 
                         //Which entrance of the current RoomData are we going to use?
                         RoomSeedRoomDataAligner alignment = new RoomSeedRoomDataAligner(currentSGW.thisSeed, potentialRoomClone);
-                        Vector2Int properEntrance = alignment.GetCorrespondingDataOpening(entranceToPrevious);
+                        properEntrance = alignment.GetCorrespondingDataOpening(entranceToPrevious);
 
                         //Position the potential room so that the proper exit of the previous room lines up with the proper entrance of this room.
                         Vector2Int roomPosition = properExit - properEntrance;
@@ -1303,21 +1307,48 @@ public class MapGenerator : MonoBehaviour
                         properEntrance += roomPosition;
 
                         //Debug.Log("Potential room after modification: " + potentialRoomClone);
-                        Debug.Log("-------------------");
-                        Debug.Log("Proper exit: " + properExit);
-                        Debug.Log("Proper entrance: " + properEntrance);
-                        Debug.Log("-------------------");
+                        //Debug.Log("-------------------");
+                        //Debug.Log("Proper exit: " + properExit);
+                        //Debug.Log("Proper entrance: " + properEntrance);
+                        //Debug.Log("-------------------");
                     }
 
                     //We've placed the room, now we need to check if it overlaps with any other rooms.
-                    bool overlaps = false;
+
+                    overlaps = false;
+                    Vector2Int entranceToIgnore = properEntrance;
+                    Vector2Int entranceToIgnoreDirectionIndicator = entranceToPrevious == null ? new Vector2Int(-1, -1) : DirectionsUtil.GetDirectionVector(entranceToPrevious.TravelDirection) + properEntrance;
+
+                    //Vector2Int exitToIgnore = exitToThis == null ? new Vector2Int(-1, -1) : exitToThis.Position;
+                    //Vector2Int exitToIgnoreDirectionIndicator = exitToThis == null ? new Vector2Int(-1, -1) : DirectionsUtil.GetDirectionVector(exitToThis.TravelDirection) + exitToThis.Position;
+
+                    List<Vector2Int> positionsToResetToTrue = new List<Vector2Int>();
+                    if(properEntrance.x != -1)
+                    {
+                        if (generatedRoomsRepresentation[entranceToIgnore.y, entranceToIgnore.x])
+                        {
+                            positionsToResetToTrue.Add(entranceToIgnore);
+                            generatedRoomsRepresentation[entranceToIgnore.y, entranceToIgnore.x] = false;
+                        }
+                        if (generatedRoomsRepresentation[entranceToIgnoreDirectionIndicator.y, entranceToIgnoreDirectionIndicator.x])
+                        {
+                            positionsToResetToTrue.Add(entranceToIgnoreDirectionIndicator);
+                            generatedRoomsRepresentation[entranceToIgnoreDirectionIndicator.y, entranceToIgnoreDirectionIndicator.x] = false;
+                        }
+                    }
+
                     foreach (Pixel pixel in potentialRoomClone.Pixels)
                     {
                         if (generatedRoomsRepresentation[pixel.Y, pixel.X])
                         {
-                            //overlaps = true;
+                            overlaps = true;
                             //break;
                         }
+                    }
+
+                    foreach (Vector2Int position in positionsToResetToTrue)
+                    {
+                        generatedRoomsRepresentation[position.y, position.x] = true;
                     }
 
 
@@ -1340,7 +1371,7 @@ public class MapGenerator : MonoBehaviour
             }
             else
             {
-                //Debug.Log("Connector room");
+                Debug.Log("Connector room");
                 break;//TODO: Implement connector rooms.
             }
 
@@ -1348,6 +1379,11 @@ public class MapGenerator : MonoBehaviour
             {
                 Debug.LogError("Failed to place a room: ");
                 Debug.LogError(currentSGW.thisSeed);
+
+                if (overlaps)
+                {
+                    Debug.LogError("Issue seems to be that there was no room that didn't overlap with another room");
+                }
                 break;
             }
 
@@ -1394,14 +1430,14 @@ public class MapGenerator : MonoBehaviour
             roomCounter++;
         }
 
-        Debug.Log("--------------- Composite Seeds: -------------------");
-        int counter = 0;
-        foreach (SeedGenWrapper sgw in debugSeedStack)
-        {
-            Debug.Log(counter + ": " + sgw.thisSeed);
-            counter++;
-        }
-        Debug.Log("-------------------- End Composite Seeds ---------------------");
+        //Debug.Log("--------------- Composite Seeds: -------------------");
+        //int counter = 0;
+        //foreach (SeedGenWrapper sgw in debugSeedStack)
+        //{
+        //    Debug.Log(counter + ": " + sgw.thisSeed);
+        //    counter++;
+        //}
+        //Debug.Log("-------------------- End Composite Seeds ---------------------");
     }
 }
 
