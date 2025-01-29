@@ -54,6 +54,19 @@ public class Pixel
     public Color Color { get { return color; } }
     public bool IsTransparent { get { return transparent; } }
 
+    public void SetColor(Color color)
+    {
+        this.color = color;
+        if (color.a != 1)
+        {
+            transparent = true;
+        }
+        else
+        {
+            transparent = false;
+        }
+    }
+
     public bool AreValuesEquivalent(Pixel other)
     {
         return x == other.x && y == other.y && color.Equals(other.color);
@@ -900,6 +913,8 @@ public class MapGenerator : MonoBehaviour
             }
         }
 
+        Debug.Log("Base rooms found: " + baseRooms.Count);
+
         if (baseRooms.Count == 0)
         {
             Debug.LogError("No base rooms found in level " + useRoomsFromLevel);
@@ -1270,8 +1285,8 @@ public class MapGenerator : MonoBehaviour
                     RoomOpening exitToThis = currentSGW.exitLeadingToThisSeed;
                     RoomOpening entranceToPrevious = exitToThis == null ? null : exitToThis.LeadsTo;
 
-                    Vector2Int properExit = new Vector2Int(-1,-1);
-                    Vector2Int properEntrance = new Vector2Int(-1,-1);
+                    Vector2Int exitProperPosition = new Vector2Int(-1,-1);
+                    Vector2Int entranceProperPosition = new Vector2Int(-1,-1);
 
                     if (entranceToPrevious == null)
                     {
@@ -1294,17 +1309,17 @@ public class MapGenerator : MonoBehaviour
                         //lines up with the proper entrance of this room.
 
                         //Which exit of the previous RoomData are we going to use?
-                        properExit = currentSGW.previousSGW.alignment.GetCorrespondingDataOpening(currentSGW.exitLeadingToThisSeed);
+                        exitProperPosition = currentSGW.previousSGW.alignment.GetCorrespondingDataOpening(currentSGW.exitLeadingToThisSeed);
 
                         //Which entrance of the current RoomData are we going to use?
                         RoomSeedRoomDataAligner alignment = new RoomSeedRoomDataAligner(currentSGW.thisSeed, potentialRoomClone);
-                        properEntrance = alignment.GetCorrespondingDataOpening(entranceToPrevious);
+                        entranceProperPosition = alignment.GetCorrespondingDataOpening(entranceToPrevious);
 
                         //Position the potential room so that the proper exit of the previous room lines up with the proper entrance of this room.
-                        Vector2Int roomPosition = properExit - properEntrance;
+                        Vector2Int roomPosition = exitProperPosition - entranceProperPosition;
                         roomPosition += DirectionsUtil.GetDirectionVector(exitToThis.TravelDirection);//Add an offset to keep rooms from overlapping at an edge.
                         potentialRoomClone.ModifyAllPositions(roomPosition);
-                        properEntrance += roomPosition;
+                        entranceProperPosition += roomPosition;
 
                         //Debug.Log("Potential room after modification: " + potentialRoomClone);
                         //Debug.Log("-------------------");
@@ -1316,14 +1331,14 @@ public class MapGenerator : MonoBehaviour
                     //We've placed the room, now we need to check if it overlaps with any other rooms.
 
                     overlaps = false;
-                    Vector2Int entranceToIgnore = properEntrance;
-                    Vector2Int entranceToIgnoreDirectionIndicator = entranceToPrevious == null ? new Vector2Int(-1, -1) : DirectionsUtil.GetDirectionVector(entranceToPrevious.TravelDirection) + properEntrance;
+                    Vector2Int entranceToIgnore = entranceProperPosition;
+                    Vector2Int entranceToIgnoreDirectionIndicator = entranceToPrevious == null ? new Vector2Int(-1, -1) : DirectionsUtil.GetDirectionVector(entranceToPrevious.TravelDirection) + entranceProperPosition;
 
                     //Vector2Int exitToIgnore = exitToThis == null ? new Vector2Int(-1, -1) : exitToThis.Position;
                     //Vector2Int exitToIgnoreDirectionIndicator = exitToThis == null ? new Vector2Int(-1, -1) : DirectionsUtil.GetDirectionVector(exitToThis.TravelDirection) + exitToThis.Position;
 
                     List<Vector2Int> positionsToResetToTrue = new List<Vector2Int>();
-                    if(properEntrance.x != -1)
+                    if(entranceProperPosition.x != -1)
                     {
                         if (generatedRoomsRepresentation[entranceToIgnore.y, entranceToIgnore.x])
                         {
@@ -1341,7 +1356,7 @@ public class MapGenerator : MonoBehaviour
                     {
                         if (generatedRoomsRepresentation[pixel.Y, pixel.X])
                         {
-                            overlaps = true;
+                            //overlaps = true;
                             //break;
                         }
                     }
