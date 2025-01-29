@@ -6,10 +6,10 @@ public class RoomDebugData : MonoBehaviour
 {
     //public RoomData roomData;
 
-    //public RoomSeedComposite roomSeedComposite;
+    public RoomSeedComposite roomSeedComposite;
 
     //public SeedGenWrapper sgw;
 
-    public List<RoomOpening> entrances = new List<RoomOpening>();
-    public List<RoomOpening> exits = new List<RoomOpening>();
+    //public List<RoomOpening> entrances = new List<RoomOpening>();
+    //public List<RoomOpening> exits = new List<RoomOpening>();
 }

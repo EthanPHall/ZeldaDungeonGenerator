@@ -721,53 +721,80 @@ public class RoomSeedComposite: RoomSeed
 
     public void GenerateEntrancesAndExits()
     {
-        RoomSeed rightMostSeed = null;
-        RoomSeed leftMostSeed = null;
-        RoomSeed topMostSeed = null;
-        RoomSeed bottomMostSeed = null;
+        List<RoomSeed> allRightMostSeeds = new List<RoomSeed>();//Seeds that are the rightmost in their row.
+        List<RoomSeed> allLeftMostSeeds = new List<RoomSeed>();
+        List<RoomSeed> allTopMostSeeds = new List<RoomSeed>();//Seeds that are the topmost in their column.
+        List<RoomSeed> allBottomMostSeeds = new List<RoomSeed>();
+
+        List<int> allRowCoordinates = new List<int>();
+        List<int> allColumnCoordinates = new List<int>();
 
         foreach (RoomSeed seed in internalSeeds)
         {
-            if (rightMostSeed == null || seed.Position.x > rightMostSeed.Position.x)
+            if (!allColumnCoordinates.Contains(seed.Position.x))
             {
-                rightMostSeed = seed;
+                allColumnCoordinates.Add(seed.Position.x);
             }
-            if (leftMostSeed == null || seed.Position.x < leftMostSeed.Position.x)
+            if (!allRowCoordinates.Contains(seed.Position.y))
             {
-                leftMostSeed = seed;
-            }
-            if (topMostSeed == null || seed.Position.y > topMostSeed.Position.y)
-            {
-                topMostSeed = seed;
-            }
-            if (bottomMostSeed == null || seed.Position.y < bottomMostSeed.Position.y)
-            {
-                bottomMostSeed = seed;
+                allRowCoordinates.Add(seed.Position.y);
             }
         }
 
-        List<RoomSeed> allRightMostSeeds = new List<RoomSeed>();
-        List<RoomSeed> allLeftMostSeeds = new List<RoomSeed>();
-        List<RoomSeed> allTopMostSeeds = new List<RoomSeed>();
-        List<RoomSeed> allBottomMostSeeds = new List<RoomSeed>();
-
-        foreach (RoomSeed seed in internalSeeds)
+        foreach(int column in allColumnCoordinates)
         {
-            if (seed.Position.x == rightMostSeed.Position.x)
+            RoomSeed topMostSeed = null;
+            RoomSeed bottomMostSeed = null;
+            foreach (RoomSeed seed in internalSeeds)
             {
-                allRightMostSeeds.Add(seed);
+                if (seed.Position.x == column)
+                {
+                    if (topMostSeed == null || seed.Position.y > topMostSeed.Position.y)
+                    {
+                        topMostSeed = seed;
+                    }
+                    if (bottomMostSeed == null || seed.Position.y < bottomMostSeed.Position.y)
+                    {
+                        bottomMostSeed = seed;
+                    }
+                }
             }
-            if (seed.Position.x == leftMostSeed.Position.x)
+
+            if (topMostSeed != null)
             {
-                allLeftMostSeeds.Add(seed);
+                allRightMostSeeds.Add(topMostSeed);
             }
-            if (seed.Position.y == topMostSeed.Position.y)
+            if (bottomMostSeed != null)
             {
-                allTopMostSeeds.Add(seed);
+                allLeftMostSeeds.Add(bottomMostSeed);
             }
-            if (seed.Position.y == bottomMostSeed.Position.y)
+        }
+
+        foreach (int row in allRowCoordinates)
+        {
+            RoomSeed rightMostSeed = null;
+            RoomSeed leftMostSeed = null;
+            foreach (RoomSeed seed in internalSeeds)
             {
-                allBottomMostSeeds.Add(seed);
+                if (seed.Position.y == row)
+                {
+                    if (rightMostSeed == null || seed.Position.x > rightMostSeed.Position.x)
+                    {
+                        rightMostSeed = seed;
+                    }
+                    if (leftMostSeed == null || seed.Position.x < leftMostSeed.Position.x)
+                    {
+                        leftMostSeed = seed;
+                    }
+                }
+            }
+            if (rightMostSeed != null)
+            {
+                allTopMostSeeds.Add(rightMostSeed);
+            }
+            if (leftMostSeed != null)
+            {
+                allBottomMostSeeds.Add(leftMostSeed);
             }
         }
 
@@ -802,6 +829,7 @@ public class RoomSeedComposite: RoomSeed
                 entrances.Add(entrance);
             }
         }
+
         return entrances;
     }
 }
@@ -1079,7 +1107,7 @@ public class MapGenerator : MonoBehaviour
                     exit.SetLeadsTo(entrance);
 
                     currentSeed.AddEntrance(entrance);
-                    roomSeeds[currentVisitor.PreviousSeed.Position.y, currentVisitor.PreviousSeed.Position.x].AddExit(exit);
+                    currentVisitor.PreviousSeed.AddExit(exit);
                 }
                 else
                 {
@@ -1104,7 +1132,7 @@ public class MapGenerator : MonoBehaviour
                     exit.SetLeadsTo(entrance);
 
                     currentSeed.AddExit(exit);
-                    roomSeeds[bossRoomCenter.y, bossRoomCenter.x].AddEntrance(entrance);
+                    bossRoomSeed.AddEntrance(entrance);
                 }
             } while (!branchMoveReport.VisitorIsDone);
 
@@ -1337,21 +1365,23 @@ public class MapGenerator : MonoBehaviour
             roomParent.AddComponent<RoomDebugData>();
             //roomParent.GetComponent<RoomDebugData>().roomData = room;
             //roomParent.GetComponent<RoomDebugData>().sgw = room.sgwUsedToMakeThis;
-            foreach(RoomOpening opening in room.sgwUsedToMakeThis.thisSeed.Exits)
-            {
-                if (opening.LeadsTo != null)
-                {
-                    roomParent.GetComponent<RoomDebugData>().exits.Add(opening);
-                }
-            }
+            roomParent.GetComponent<RoomDebugData>().roomSeedComposite = room.sgwUsedToMakeThis.thisSeed;
+            
+            //foreach(RoomOpening opening in room.sgwUsedToMakeThis.thisSeed.Exits)
+            //{
+            //    if (opening.LeadsTo != null)
+            //    {
+            //        roomParent.GetComponent<RoomDebugData>().exits.Add(opening);
+            //    }
+            //}
 
-            foreach (RoomOpening opening in room.sgwUsedToMakeThis.thisSeed.Entrances)
-            {
-                if (opening.LeadsTo != null)
-                {
-                    roomParent.GetComponent<RoomDebugData>().entrances.Add(opening);
-                }
-            }
+            //foreach (RoomOpening opening in room.sgwUsedToMakeThis.thisSeed.Entrances)
+            //{
+            //    if (opening.LeadsTo != null)
+            //    {
+            //        roomParent.GetComponent<RoomDebugData>().entrances.Add(opening);
+            //    }
+            //}
 
             roomParent.transform.position = new Vector3(room.WallPixels[0].X, 0, room.WallPixels[0].Y);
             //Instantiate(roomParent);
