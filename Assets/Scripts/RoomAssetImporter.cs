@@ -402,15 +402,22 @@ public class RoomAssetImporterVisitor : PixelVisitor
         roomData = new RoomData(toVisit.width, toVisit.height);
 
         //Find the starting point
+        bool done = false;
         for (int x = 0; x < toVisit.width; x++)
         {
             for (int y = 0; y < toVisit.height; y++)
             {
-                if(toVisit.GetPixel(x, y).Equals(Color.red))
+                if (toVisit.GetPixel(x, y).Equals(Color.red))
                 {
                     startingPoint = new Vector2Int(x, y);
                     position = startingPoint;
+                    done = true;
                 }
+            }
+
+            if (done)
+            {
+                break;
             }
         }
     }
@@ -496,12 +503,15 @@ public class RoomAssetImporterVisitor : PixelVisitor
 
         if (currentOpening == null)
         {
-            Debug.LogWarning("No current opening on Second Loop, not sure if that's a problem yet");
+            //We're not ready yet to visit anything. Not a failure, just not ready.
             return new VisitReport(true, null);
         }
 
         //We're adding potential positions for the current opening. Is this pixel a potential position?
         Pixel neighborInDirection = currentNeighbors.GetNeighbor(direction);
+        PixelNeighbors nextNeighbors = FindNeighbors(toVisit, neighborInDirection.GetPosition());
+        Pixel nextNeighborInDirection = nextNeighbors.GetNeighbor(direction);
+
         bool isPotentialPosition = false;
 
         if(directionJustFlipped)
@@ -517,6 +527,13 @@ public class RoomAssetImporterVisitor : PixelVisitor
         {
             isPotentialPosition = false;
         }
+        else if (nextNeighborInDirection != null && nextNeighborInDirection.Color.Equals(Color.black) && !nextNeighborInDirection.GetPosition().Equals(currentOpening.positionAndOthers.defaultPosition))
+        {
+            //We don't want the potential openings to be within two spaces of another default opening (not including itself).
+            //Walls are 1 unit thick, so if the openings went Opening-Wall-Opening, then that would cause guaranteed collisions I think,
+            //as two rooms fight for that single middle wall space.
+            isPotentialPosition = false;
+        }
         else if(neighborInDirection.Color.Equals(Color.black) && neighborInDirection.GetPosition().Equals(currentOpening.positionAndOthers.defaultPosition))
         {
             isPotentialPosition = true;
@@ -528,6 +545,8 @@ public class RoomAssetImporterVisitor : PixelVisitor
 
         if (isPotentialPosition)
         {
+
+            Debug.LogWarning("Creating another potential position.");
             currentOpening.positionAndOthers.potentialPositions.Add(position);
         }
 
@@ -645,10 +664,26 @@ public class RoomAssetImporterVisitor : PixelVisitor
             }
 
             Pixel neighbor = currentNeighbors.GetNeighbor(direction);
-            if (neighbor != null && neighbor.Color.Equals(Color.black) && !neighbor.GetPosition().Equals(currentOpening.positionAndOthers.defaultPosition))
+            PixelNeighbors nextNeighbors = FindNeighbors(toVisit, neighbor.GetPosition());
+            Pixel nextNeighbor = nextNeighbors.GetNeighbor(direction);
+
+
+            if (nextNeighbor != null && nextNeighbor.Color.Equals(Color.black) && !nextNeighbor.GetPosition().Equals(currentOpening.positionAndOthers.defaultPosition))
             {
-                //Debug.Log("Second Loop Actually Move: Neighbor is Opening That Isn't Me. Moving to the " + direction + " and current position = " + position);
-                
+                if (!directionHasFlipped)
+                {
+                    direction = DirectionsUtil.GetOppositeDirection(direction);
+                    directionHasFlipped = true;
+                    directionJustFlipped = true;
+                }
+                else
+                {
+                    //We're done with this opening
+                    MoveOnWithSecondLoop();
+                }
+            }
+            else if (neighbor != null && neighbor.Color.Equals(Color.black) && !neighbor.GetPosition().Equals(currentOpening.positionAndOthers.defaultPosition))
+            {
                 if(!directionHasFlipped)
                 {
                     direction = DirectionsUtil.GetOppositeDirection(direction);
@@ -761,22 +796,22 @@ public class RoomAssetImporter : ScriptedImporter
                 rightPotentialsCount++;
             }
         }
-        Debug.Log("----------------------------------------"); 
-        Debug.Log("Room Data Potential Positions Counts"); 
-        Debug.Log("Top Potentials: " + topPotentialsCount);
-        Debug.Log("Bottom Potentials: " + bottomPotentialsCount);
-        Debug.Log("Left Potentials: " + leftPotentialsCount);
-        Debug.Log("Right Potentials: " + rightPotentialsCount);
-        Debug.Log("----------------------------------------");
+        //Debug.Log("----------------------------------------"); 
+        //Debug.Log("Room Data Potential Positions Counts"); 
+        //Debug.Log("Top Potentials: " + topPotentialsCount);
+        //Debug.Log("Bottom Potentials: " + bottomPotentialsCount);
+        //Debug.Log("Left Potentials: " + leftPotentialsCount);
+        //Debug.Log("Right Potentials: " + rightPotentialsCount);
+        //Debug.Log("----------------------------------------");
 
         List<RoomData> allPotentialRooms = visitor.RoomData.GetAllPotentialRooms();
-        Debug.Log("----------------------------------------");
-        Debug.Log("All Potential Rooms: " + allPotentialRooms.Count); 
-        foreach (RoomData potentialRoom in allPotentialRooms)
-        {
-            Debug.Log(potentialRoom);
-        }
-        Debug.Log("----------------------------------------");
+        //Debug.Log("----------------------------------------");
+        //Debug.Log("All Potential Rooms: " + allPotentialRooms.Count); 
+        //foreach (RoomData potentialRoom in allPotentialRooms)
+        //{
+        //    Debug.Log(potentialRoom);
+        //}
+        //Debug.Log("----------------------------------------");
 
         for(int i = 0; i < allPotentialRooms.Count; i++)
         {
