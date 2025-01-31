@@ -883,6 +883,8 @@ public class MapGenerator : MonoBehaviour
     public int usePathsFromLevel = 0;
     public int useRoomsFromLevel = 0;
 
+    public bool detectRoomCollisions = true;
+
     [Range(0, 100)]
     public int chanceToExpandRoom = 50;
     public int roomMinExpandedWidth = 2;
@@ -1290,21 +1292,14 @@ public class MapGenerator : MonoBehaviour
 
                     if (entranceToPrevious == null)
                     {
-                        //Debug.Log("Looking at start potential room: " + potentialRoomClone);
-                        //Debug.Log("-----------------");
-
                         //We must be looking at the start room, which we place by using the starting point from a while ago,
                         //taking into account that the room representation is much larger than the path representation.
                         Vector2Int roomPosition = new Vector2Int(startingPoint.x * 20, startingPoint.y * 20);//TODO: Remove magic numbers, not just from here.
-                        potentialRoomClone.ModifyAllPositions(roomPosition);
                         
-                        //Debug.Log("Potential room after modification: " + potentialRoomClone);
+                        potentialRoomClone.ModifyAllPositions(roomPosition);
                     }
                     else
                     {
-                        //Debug.Log("Looking at non-start potential room: " + potentialRoomClone);
-                        //Debug.Log("-----------------");
-
                         //We're looking at a non-start room here, so we need to position it so that the proper exit of the previous room
                         //lines up with the proper entrance of this room.
 
@@ -1320,12 +1315,6 @@ public class MapGenerator : MonoBehaviour
                         roomPosition += DirectionsUtil.GetDirectionVector(exitToThis.TravelDirection);//Add an offset to keep rooms from overlapping at an edge.
                         potentialRoomClone.ModifyAllPositions(roomPosition);
                         entranceProperPosition += roomPosition;
-
-                        //Debug.Log("Potential room after modification: " + potentialRoomClone);
-                        //Debug.Log("-------------------");
-                        //Debug.Log("Proper exit: " + properExit);
-                        //Debug.Log("Proper entrance: " + properEntrance);
-                        //Debug.Log("-------------------");
                     }
 
                     //We've placed the room, now we need to check if it overlaps with any other rooms.
@@ -1334,36 +1323,42 @@ public class MapGenerator : MonoBehaviour
                     Vector2Int entranceToIgnore = entranceProperPosition;
                     Vector2Int entranceToIgnoreDirectionIndicator = entranceToPrevious == null ? new Vector2Int(-1, -1) : DirectionsUtil.GetDirectionVector(entranceToPrevious.TravelDirection) + entranceProperPosition;
 
+                    //Debug.Log("Entrance to ignore: " + entranceToIgnore);
+                    //Debug.Log("Entrance to ignore direction indicator: " + entranceToIgnoreDirectionIndicator);
+
                     //Vector2Int exitToIgnore = exitToThis == null ? new Vector2Int(-1, -1) : exitToThis.Position;
                     //Vector2Int exitToIgnoreDirectionIndicator = exitToThis == null ? new Vector2Int(-1, -1) : DirectionsUtil.GetDirectionVector(exitToThis.TravelDirection) + exitToThis.Position;
 
-                    List<Vector2Int> positionsToResetToTrue = new List<Vector2Int>();
-                    if(entranceProperPosition.x != -1)
-                    {
-                        if (generatedRoomsRepresentation[entranceToIgnore.y, entranceToIgnore.x])
+                    if (detectRoomCollisions)
+                    { 
+                        List<Vector2Int> positionsToResetToTrue = new List<Vector2Int>();
+                        if(entranceProperPosition.x != -1)
                         {
-                            positionsToResetToTrue.Add(entranceToIgnore);
-                            generatedRoomsRepresentation[entranceToIgnore.y, entranceToIgnore.x] = false;
+                            if (generatedRoomsRepresentation[entranceToIgnore.y, entranceToIgnore.x])
+                            {
+                                positionsToResetToTrue.Add(entranceToIgnore);
+                                generatedRoomsRepresentation[entranceToIgnore.y, entranceToIgnore.x] = false;
+                            }
+                            if (generatedRoomsRepresentation[entranceToIgnoreDirectionIndicator.y, entranceToIgnoreDirectionIndicator.x])
+                            {
+                                positionsToResetToTrue.Add(entranceToIgnoreDirectionIndicator);
+                                generatedRoomsRepresentation[entranceToIgnoreDirectionIndicator.y, entranceToIgnoreDirectionIndicator.x] = false;
+                            }
                         }
-                        if (generatedRoomsRepresentation[entranceToIgnoreDirectionIndicator.y, entranceToIgnoreDirectionIndicator.x])
-                        {
-                            positionsToResetToTrue.Add(entranceToIgnoreDirectionIndicator);
-                            generatedRoomsRepresentation[entranceToIgnoreDirectionIndicator.y, entranceToIgnoreDirectionIndicator.x] = false;
-                        }
-                    }
 
-                    foreach (Pixel pixel in potentialRoomClone.Pixels)
-                    {
-                        if (generatedRoomsRepresentation[pixel.Y, pixel.X])
+                        foreach (Pixel pixel in potentialRoomClone.Pixels)
                         {
-                            //overlaps = true;
-                            //break;
+                            if (generatedRoomsRepresentation[pixel.Y, pixel.X])
+                            {
+                                overlaps = true;
+                                break;
+                            }
                         }
-                    }
 
-                    foreach (Vector2Int position in positionsToResetToTrue)
-                    {
-                        generatedRoomsRepresentation[position.y, position.x] = true;
+                        foreach (Vector2Int position in positionsToResetToTrue)
+                        {
+                            generatedRoomsRepresentation[position.y, position.x] = true;
+                        }
                     }
 
 

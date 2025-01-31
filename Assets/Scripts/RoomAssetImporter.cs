@@ -57,8 +57,6 @@ public class RoomData
 
     public RoomData(RoomData roomData)
     {
-        Debug.Log(roomData.topPotentials == null);
-
         width = roomData.width;
         height = roomData.height;
 
@@ -198,47 +196,57 @@ public class RoomData
 
     private void AddPotentialRooms(List<RoomData> potentialRooms, List<PositionPlusPotentialOthers> potentials, Directions direction, ref bool alreadyIncludesDefaultRoom)
     {
-        foreach (PositionPlusPotentialOthers potential in potentials)
+        foreach (PositionPlusPotentialOthers positionPlusPotentialOthers in potentials)
         {
-            Vector2Int originalOpeningPosition = potential.defaultPosition;
-            Vector2Int originalOpeningDirectionIndicator = potential.defaultPosition + DirectionsUtil.GetDirectionVector(direction);
+            Vector2Int originalOpeningPosition = positionPlusPotentialOthers.defaultPosition;
+            Vector2Int originalOpeningDirectionIndicator = positionPlusPotentialOthers.defaultPosition + DirectionsUtil.GetDirectionVector(direction);
 
-            foreach (Vector2Int potentialPosition in potential.potentialPositions)
+            foreach (Vector2Int potentialPosition in positionPlusPotentialOthers.potentialPositions)
             {
                 RoomData potentialRoom = new RoomData(this);
-                Debug.Log("Initial Room Data\n" + potentialRoom);
 
                 Vector2Int newOpeningPosition = potentialPosition;
                 Vector2Int newOpeningDirectionIndicator = potentialPosition + DirectionsUtil.GetDirectionVector(direction);
 
                 if (newOpeningPosition == originalOpeningPosition)
                 {
-                    if (alreadyIncludesDefaultRoom)
+                    if(alreadyIncludesDefaultRoom)
                     {
                         continue;
                     }
-                    alreadyIncludesDefaultRoom = true;
+                    else
+                    {
+                        alreadyIncludesDefaultRoom = true;
+                    }
                 }
-
-                foreach (Pixel pixel in potentialRoom.pixels)
+                else
                 {
-                    if (pixel.GetPosition().Equals(originalOpeningPosition))
+                    Pixel markedForDeletion = null;
+                    foreach (Pixel pixel in potentialRoom.pixels)
                     {
-                        pixel.SetColor(Color.red);
-                    }
-                    else if (pixel.GetPosition().Equals(originalOpeningDirectionIndicator))
-                    {
-                        pixel.SetColor(Color.clear);
-                    }
-                    else if(pixel.GetPosition().Equals(newOpeningPosition))
-                    {
-                        pixel.SetColor(Color.black);
+                        if (pixel.GetPosition().Equals(originalOpeningPosition))
+                        {
+                            pixel.SetColor(Color.red);
+                        }
+                        else if (pixel.GetPosition().Equals(originalOpeningDirectionIndicator))
+                        {
+                            markedForDeletion = pixel;
+                        }
+                        else if (pixel.GetPosition().Equals(newOpeningPosition))
+                        {
+                            pixel.SetColor(Color.black);
 
-                        potentialRoom.ModifyOpening(originalOpeningPosition, newOpeningPosition);
+                            potentialRoom.ModifyOpening(originalOpeningPosition, newOpeningPosition);
+                        }
+                        else if (pixel.GetPosition().Equals(newOpeningDirectionIndicator))
+                        {
+                            pixel.SetColor(Color.blue);
+                        }
                     }
-                    else if (pixel.GetPosition().Equals(newOpeningDirectionIndicator))
+
+                    if(markedForDeletion != null)
                     {
-                        pixel.SetColor(Color.blue);
+                        potentialRoom.pixels.Remove(markedForDeletion);
                     }
                 }
 
