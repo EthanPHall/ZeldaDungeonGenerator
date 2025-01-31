@@ -1217,14 +1217,14 @@ public class MapGenerator : MonoBehaviour
 
             //Is the current room seed a base room or a connector room?
             List<SeedGenWrapper> nextSeeds = new List<SeedGenWrapper>();
-            bool atLeastOneNextRoomExists = false;
+            List<RoomOpening> connectorExits = new List<RoomOpening>();
             foreach (RoomOpening exit in currentSGW.thisSeed.Exits)
             {
                 if (exit.LeadsTo != null)
                 {
                     if (exit.LeadsTo.BelongsTo.PartOf.HasGeneratedRoomData)
                     {
-                        atLeastOneNextRoomExists = true;
+                        connectorExits.Add(exit);
                     }
                     else
                     {
@@ -1233,14 +1233,7 @@ public class MapGenerator : MonoBehaviour
                 }
             }
 
-            if (atLeastOneNextRoomExists)
-            {
-                currentSGW.thisSeed.SetIsBaseRoom(false);
-            }
-            else
-            {
-                currentSGW.thisSeed.SetIsBaseRoom(true);
-            }
+            currentSGW.thisSeed.SetIsBaseRoom(connectorExits.Count == 0);
 
             if (currentSGW.thisSeed.IsBaseRoom)
             {
@@ -1381,7 +1374,26 @@ public class MapGenerator : MonoBehaviour
             }
             else
             {
-                Debug.Log("Connector room");
+                //We need to generate our own room data here rather than use a pre-defined one.
+                RoomData connectorRoom = new RoomData(10, 10);//TODO: Magic Numbers
+
+                foreach (RoomOpening connectorExit in connectorExits)
+                {
+                    //We need the exit to use for the current room and the entrance to match with of the next room
+                    Vector2Int connectorsEntranceWorldPosition = currentSGW.previousSGW.alignment.GetCorrespondingDataOpening(currentSGW.exitLeadingToThisSeed);
+                    connectorsEntranceWorldPosition += DirectionsUtil.GetDirectionVector(connectorExit.TravelDirection);
+
+                    Vector2Int connectorsExitWorldPosition = connectorExit.LeadsTo.BelongsTo.PartOf.RoomData.sgwUsedToMakeThis.alignment.GetCorrespondingDataOpening(connectorExit.LeadsTo);
+                    connectorsExitWorldPosition -= DirectionsUtil.GetDirectionVector(connectorExit.TravelDirection);
+                
+                    Debug.Log("Connector entrance: " + connectorsEntranceWorldPosition);
+                    Debug.Log("Connector exit: " + connectorsExitWorldPosition);
+                }
+                
+
+                //I think we need to use an algorithm like A* to find the best path to the next room. A path from the exit to the entrance that we found earlier.
+
+
                 break;//TODO: Implement connector rooms.
             }
 
@@ -1448,6 +1460,17 @@ public class MapGenerator : MonoBehaviour
         //    counter++;
         //}
         //Debug.Log("-------------------- End Composite Seeds ---------------------");
+    }
+}
+
+public class ExitEntranceDuo
+{
+    public RoomOpening exit;
+    public RoomOpening entrance;
+    public ExitEntranceDuo(RoomOpening exit, RoomOpening entrance)
+    {
+        this.exit = exit;
+        this.entrance = entrance;
     }
 }
 
