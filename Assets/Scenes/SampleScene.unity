@@ -446,6 +446,7 @@ GameObject:
   - component: {fileID: 1285899286}
   - component: {fileID: 1285899288}
   - component: {fileID: 1285899289}
+  - component: {fileID: 1285899290}
   m_Layer: 0
   m_Name: Map Generator
   m_TagString: Untagged
@@ -543,7 +544,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1285899285}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 7580057ea36aff94293cd431ec7b3875, type: 3}
   m_Name: 
@@ -551,12 +552,29 @@ MonoBehaviour:
   generateNewMap: 1
   usePathsFromLevel: 0
   useRoomsFromLevel: 0
+  detectRoomCollisions: 1
   chanceToExpandRoom: 76
   roomMinExpandedWidth: 2
   roomMaxExpandedWidth: 4
   roomMinExpandedHeight: 2
   roomMaxExpandedHeight: 4
   roomVisualPrefab: {fileID: 7898547164531157980, guid: ade2cc8bf1aedd940ab27d9c14724708, type: 3}
+  wallPrefab: {fileID: 3532408704089409363, guid: 9bd69836cf3bc8a42a47a5a74fd820ad, type: 3}
+--- !u!114 &1285899290
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1285899285}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7ba8db30237474a4faa091cdd6be346c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  generateMap: 1
+  usePathsFromLevel: 0
+  useRoomsFromLevel: 0
   wallPrefab: {fileID: 3532408704089409363, guid: 9bd69836cf3bc8a42a47a5a74fd820ad, type: 3}
 --- !u!4 &142691045732961215
 Transform:
