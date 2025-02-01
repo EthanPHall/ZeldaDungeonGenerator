@@ -892,6 +892,10 @@ public class MapGenerator : MonoBehaviour
     public int roomMinExpandedHeight = 2;
     public int roomMaxExpandedHeight = 4;
 
+    public int connectionAttemptsMax = 1000;
+
+    public int averagePixelsPerSmallRoom = 100;
+
     public RoomWithOpeningMarks roomVisualPrefab;
 
     public GameObject wallPrefab;
@@ -1381,17 +1385,36 @@ public class MapGenerator : MonoBehaviour
                 {
                     //We need the exit to use for the current room and the entrance to match with of the next room
                     Vector2Int connectorsEntranceWorldPosition = currentSGW.previousSGW.alignment.GetCorrespondingDataOpening(currentSGW.exitLeadingToThisSeed);
-                    connectorsEntranceWorldPosition += DirectionsUtil.GetDirectionVector(connectorExit.TravelDirection);
+                    connectorsEntranceWorldPosition += DirectionsUtil.GetDirectionVector(currentSGW.exitLeadingToThisSeed.TravelDirection);
 
-                    Vector2Int connectorsExitWorldPosition = connectorExit.LeadsTo.BelongsTo.PartOf.RoomData.sgwUsedToMakeThis.alignment.GetCorrespondingDataOpening(connectorExit.LeadsTo);
-                    connectorsExitWorldPosition -= DirectionsUtil.GetDirectionVector(connectorExit.TravelDirection);
-                
-                    Debug.Log("Connector entrance: " + connectorsEntranceWorldPosition);
-                    Debug.Log("Connector exit: " + connectorsExitWorldPosition);
+                    RoomSeedRoomDataAligner connectedRoomOpeningAlignment = connectorExit.LeadsTo.BelongsTo.PartOf.RoomData.sgwUsedToMakeThis.alignment;
+                    Vector2Int connectorsExitWorldPosition = connectedRoomOpeningAlignment.GetCorrespondingDataOpening(connectorExit.LeadsTo);
+                    Directions connectedRoomEntranceDirection = connectedRoomOpeningAlignment.GetCorrespondingRoomOpening(connectorsExitWorldPosition).TravelDirection; // This gives us the opening direction of the composite room that we're connecting to, rather than any sub room.
+                    connectorsExitWorldPosition += DirectionsUtil.GetDirectionVector(connectedRoomEntranceDirection);
+
+
+                    /* We need to find the best path to the next room. A path from the exit to the entrance that we found earlier. */
+                    //First, we need to make sure that the start and end positions on the map representation are not marked as walls.
+                    List<Vector2Int> positionsToResetToTrue = new List<Vector2Int>();
+                    if (generatedRoomsRepresentation[connectorsEntranceWorldPosition.y, connectorsEntranceWorldPosition.x])
+                    {
+                        positionsToResetToTrue.Add(connectorsEntranceWorldPosition);
+                        generatedRoomsRepresentation[connectorsEntranceWorldPosition.y, connectorsEntranceWorldPosition.x] = false;
+                    }
+                    if (generatedRoomsRepresentation[connectorsExitWorldPosition.y, connectorsExitWorldPosition.x])
+                    {
+                        positionsToResetToTrue.Add(connectorsExitWorldPosition);
+                        generatedRoomsRepresentation[connectorsExitWorldPosition.y, connectorsExitWorldPosition.x] = false;
+                    }
+
+                    //Now we need to find the path.
+                    List<Vector2Int> connectingPath = FindConnectingPath(generatedRoomsRepresentation, connectorsEntranceWorldPosition, connectorsExitWorldPosition);
+                    
+                    foreach (Vector2Int position in positionsToResetToTrue)
+                    {
+                        generatedRoomsRepresentation[position.y, position.x] = true;
+                    }
                 }
-                
-
-                //I think we need to use an algorithm like A* to find the best path to the next room. A path from the exit to the entrance that we found earlier.
 
 
                 break;//TODO: Implement connector rooms.
@@ -1460,6 +1483,103 @@ public class MapGenerator : MonoBehaviour
         //    counter++;
         //}
         //Debug.Log("-------------------- End Composite Seeds ---------------------");
+    }
+
+    class AStarNode 
+    {
+        private float g;
+        private float h;
+        private float f;
+
+        private Vector2Int position;
+
+        private AStarNode parent;
+
+        public AStarNode(Vector2Int position, Vector2Int goal, AStarNode parent)
+        {
+            this.position = position;
+            this.parent = parent;
+            g = parent == null ? 0 : parent.g + 1;
+            h = CalcManhattanDistance(position, goal);
+            f = g + h;
+        }
+
+        public float F { get { return f; } }
+        public Vector2Int Position { get { return position; } }
+        public AStarNode Parent { get { return parent; } }
+
+        private float CalcManhattanDistance(Vector2Int a, Vector2Int b)
+        {
+            return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
+        }
+    }
+
+    private List<Vector2Int> FindConnectingPath(bool[,] map, Vector2Int startingPoint, Vector2Int endPoint)
+    {
+        List<Vector2Int> path = new List<Vector2Int>();
+        List<AStarNode> open = new List<AStarNode>();
+        List<AStarNode> closed = new List<AStarNode>();
+
+        AStarNode start = new AStarNode(startingPoint, endPoint, null);
+        open.Add(start);
+
+        int attemptCounter = 0;
+
+        while (open.Count > 0 && attemptCounter < connectionAttemptsMax)
+        {
+            attemptCounter++;
+
+            AStarNode current = open[0];
+            open.RemoveAt(0);
+            closed.Add(current);
+            if (current.Position == endPoint)
+            {
+                AStarNode temp = current;
+                while (temp != null)
+                {
+                    path.Add(temp.Position);
+                    temp = temp.Parent;
+                }
+                path.Reverse();
+                break;
+            }
+            List<Vector2Int> neighbors = new List<Vector2Int>();
+            neighbors.Add(new Vector2Int(current.Position.x + 1, current.Position.y));
+            neighbors.Add(new Vector2Int(current.Position.x - 1, current.Position.y));
+            neighbors.Add(new Vector2Int(current.Position.x, current.Position.y + 1));
+            neighbors.Add(new Vector2Int(current.Position.x, current.Position.y - 1));
+            foreach (Vector2Int neighbor in neighbors)
+            {
+                if (neighbor.x < 0 || neighbor.x >= map.GetLength(0) || neighbor.y < 0 || neighbor.y >= map.GetLength(1))
+                {
+                    continue;
+                }
+                if (map[neighbor.y, neighbor.x])
+                {
+                    continue;
+                }
+                AStarNode neighborNode = new AStarNode(neighbor, endPoint, current);
+                if (closed.Contains(neighborNode))
+                {
+                    continue;
+                }
+                if (open.Contains(neighborNode))
+                {
+                    int index = open.IndexOf(neighborNode);
+                    if (neighborNode.F < open[index].F)
+                    {
+                        open[index] = neighborNode;
+                    }
+                }
+                else
+                {
+                    open.Add(neighborNode);
+                }
+            }
+            open.Sort((a, b) => a.F.CompareTo(b.F));
+        }
+
+        return path;
     }
 }
 
