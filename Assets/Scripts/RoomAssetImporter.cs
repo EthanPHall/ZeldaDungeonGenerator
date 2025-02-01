@@ -137,9 +137,62 @@ public class RoomData
         }
     }
 
-    public void AddPixel(Pixel pixel)
+    public void AddOpening(Vector2Int roomOpening, Directions direction)
     {
+        switch (direction)
+        {
+            case Directions.Top:
+                topOpenings.Add(roomOpening);
+                break;
+            case Directions.Bottom:
+                bottomOpenings.Add(roomOpening);
+                break;
+            case Directions.Left:
+                leftOpenings.Add(roomOpening);
+                break;
+            case Directions.Right:
+                rightOpenings.Add(roomOpening);
+                break;
+        }
+
+        Pixel newOpeningPixel = new Pixel(roomOpening.x, roomOpening.y, Color.black);
+
+        if (!AddPixel(newOpeningPixel))
+        {
+            ReplacePixel(newOpeningPixel);
+        }
+    }
+
+    public bool AddWall(Vector2Int wall)
+    {
+        return AddPixel(new Pixel(wall.x, wall.y, Color.red));
+    }
+
+    public bool AddPixel(Pixel pixel)
+    {
+        foreach(Pixel existingPixel in pixels)
+        {
+            if (existingPixel.GetPosition().Equals(pixel.GetPosition()))
+            {
+                return false;
+            }
+        }
+
         pixels.Add(pixel);
+
+        return true;
+    }
+
+    private void ReplacePixel(Pixel pixel)
+    {
+        for (int i = 0; i < pixels.Count; i++)
+        {
+            if (pixels[i].GetPosition().Equals(pixel.GetPosition()))
+            {
+                pixels[i] = pixel;
+                return;
+            }
+        }
     }
 
     public void SetPotentialPositionsList(List<PositionPlusPotentialOthers> positions, Directions direction)

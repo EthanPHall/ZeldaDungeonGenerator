@@ -2,6 +2,7 @@ using OpenCover.Framework.Model;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Unity.VisualScripting;
 using UnityEngine;
@@ -1380,6 +1381,7 @@ public class MapGenerator : MonoBehaviour
             {
                 //We need to generate our own room data here rather than use a pre-defined one.
                 RoomData connectorRoom = new RoomData(10, 10);//TODO: Magic Numbers
+                List<Vector2Int> connectingPaths = new List<Vector2Int>();
 
                 foreach (RoomOpening connectorExit in connectorExits)
                 {
@@ -1391,7 +1393,6 @@ public class MapGenerator : MonoBehaviour
                     Vector2Int connectorsExitWorldPosition = connectedRoomOpeningAlignment.GetCorrespondingDataOpening(connectorExit.LeadsTo);
                     Directions connectedRoomEntranceDirection = connectedRoomOpeningAlignment.GetCorrespondingRoomOpening(connectorsExitWorldPosition).TravelDirection; // This gives us the opening direction of the composite room that we're connecting to, rather than any sub room.
                     connectorsExitWorldPosition += DirectionsUtil.GetDirectionVector(connectedRoomEntranceDirection);
-
 
                     /* We need to find the best path to the next room. A path from the exit to the entrance that we found earlier. */
                     //First, we need to make sure that the start and end positions on the map representation are not marked as walls.
@@ -1408,14 +1409,51 @@ public class MapGenerator : MonoBehaviour
                     }
 
                     //Now we need to find the path.
-                    List<Vector2Int> connectingPath = FindConnectingPath(generatedRoomsRepresentation, connectorsEntranceWorldPosition, connectorsExitWorldPosition);
+                    List<Vector2Int> specificConnectingPath = FindConnectingPath(generatedRoomsRepresentation, connectorsEntranceWorldPosition, connectorsExitWorldPosition);
                     
                     foreach (Vector2Int position in positionsToResetToTrue)
                     {
                         generatedRoomsRepresentation[position.y, position.x] = true;
                     }
+
+                    if (specificConnectingPath.Count == 0)
+                    {
+                        Debug.LogError("Failed to find a connecting path for a connector room.");
+                        break;
+                    }
+
+                    connectingPaths.AddRange(specificConnectingPath);
+
+                    /* Add the openings that we've been working on to the RoomData */
+                    connectorRoom.AddOpening(connectorsEntranceWorldPosition, DirectionsUtil.GetOppositeDirection(currentSGW.exitLeadingToThisSeed.TravelDirection));
+                    connectorRoom.AddOpening(connectorsExitWorldPosition, connectorExit.TravelDirection);
                 }
 
+                List<Vector2Int> walls = new List<Vector2Int>();
+                List<Vector2Int> expandedRoom = ExpandRoom(generatedRoomsRepresentation, connectingPaths, averagePixelsPerSmallRoom, out walls);
+
+                if (expandedRoom.Count == 0)
+                {
+                    Debug.LogError("Failed to expand a connector room.");
+                    break;
+                }
+
+                foreach (Vector2Int position in expandedRoom)
+                {
+                    generatedRoomsRepresentation[position.y, position.x] = true;
+                }
+                foreach (Vector2Int position in walls)
+                {
+                    generatedRoomsRepresentation[position.y, position.x] = true;
+
+                    connectorRoom.AddWall(position);
+                }
+
+                currentSGW.thisSeed.RoomData = connectorRoom;
+                currentSGW.SetAssociatedRoom(connectorRoom);
+
+                connectorRoom.sgwUsedToMakeThis = currentSGW;
+                generatedRooms.Add(connectorRoom);
 
                 break;//TODO: Implement connector rooms.
             }
@@ -1483,6 +1521,41 @@ public class MapGenerator : MonoBehaviour
         //    counter++;
         //}
         //Debug.Log("-------------------- End Composite Seeds ---------------------");
+    }
+
+    private List<Vector2Int> ExpandRoom(bool[,] map, List<Vector2Int> startingRooms, int tryForQuantityOfRooms, out List<Vector2Int> walls)
+    {
+        List<Vector2Int> expandedRooms = new List<Vector2Int>();
+        Queue<Vector2Int> roomQueue = new Queue<Vector2Int>(startingRooms);
+        while (roomQueue.Count > 0 && expandedRooms.Count < tryForQuantityOfRooms)
+        {
+            Vector2Int currentRoom = roomQueue.Dequeue();
+            expandedRooms.Add(currentRoom);
+            List<Vector2Int> neighbors = new List<Vector2Int>();
+            neighbors.Add(new Vector2Int(currentRoom.x + 1, currentRoom.y));
+            neighbors.Add(new Vector2Int(currentRoom.x - 1, currentRoom.y));
+            neighbors.Add(new Vector2Int(currentRoom.x, currentRoom.y + 1));
+            neighbors.Add(new Vector2Int(currentRoom.x, currentRoom.y - 1));
+            foreach (Vector2Int neighbor in neighbors)
+            {
+                if (neighbor.x < 0 || neighbor.x >= map.GetLength(0) || neighbor.y < 0 || neighbor.y >= map.GetLength(1))
+                {
+                    continue;
+                }
+                if (map[(int)neighbor.y, (int)neighbor.x])
+                {
+                    continue;
+                }
+                if (expandedRooms.Contains(neighbor) || roomQueue.Contains(neighbor))
+                {
+                    continue;
+                }
+                roomQueue.Enqueue(neighbor);
+            }
+        }
+
+        walls = roomQueue.ToList<Vector2Int>();
+        return expandedRooms;
     }
 
     class AStarNode 
