@@ -172,12 +172,12 @@ public class MapGeneratorRevised : MonoBehaviour
 
         int mapXDimension = highest.x * 2 + roomGridExtra;//The extra space is to ensure that the path is fully contained.
         int mapYDimension = highest.y * 2 + roomGridExtra;
-        while ((mapXDimension - 4) % 3 != 0 && ((mapXDimension - 4) % 3) % 2 == 0)
+        while ((mapXDimension - 5) % 4 != 0)
         {
             mapXDimension++;
         }
 
-        while ((mapYDimension - 4) % 3 != 0 && ((mapYDimension - 4) % 3) % 2 == 0)
+        while ((mapYDimension - 5) % 4 != 0)
         {
             mapYDimension++;
         }
@@ -201,10 +201,10 @@ public class MapGeneratorRevised : MonoBehaviour
         }
 
         /* Step 8: Set every bool along the critical path to false. These are the openings. */
-        //foreach (Vector2Int position in criticalPathPositions)
-        //{
-        //    map[position.x, position.y] = false;
-        //}
+        foreach (Vector2Int position in criticalPathPositions)
+        {
+            map[position.x, position.y] = false;
+        }
 
         /* Step 9: Merge openings that lead from 1 room to 1 other room. */
         //TODO: Implement this step
@@ -227,7 +227,7 @@ public class MapGeneratorRevised : MonoBehaviour
         pathParent.transform.parent = transform;
         foreach (Vector2Int position in criticalPathPositions)
         {
-            Instantiate(wallPrefab, new Vector3(position.x, 0, position.y), Quaternion.identity, pathParent.transform);
+            //Instantiate(wallPrefab, new Vector3(position.x, 0, position.y), Quaternion.identity, pathParent.transform);
         }
     }
 
@@ -330,9 +330,9 @@ public class MapGeneratorRevised : MonoBehaviour
         List<Room> rooms = new List<Room>();
         List<Vector2Int> potentialRoomPositions = new List<Vector2Int>();
 
-        Debug.Log("(" + (map.GetLength(0) - 4) / 3 + ", " + (map.GetLength(1) - 4) / 3 + ")");
+        Debug.Log("(" + (map.GetLength(0) - 5) / 4 + ", " + (map.GetLength(1) - 5) / 4 + ")");
 
-        RoomNode[,] roomNodes = new RoomNode[(map.GetLength(0) - 4) / 3, (map.GetLength(1) - 4) / 3];
+        RoomNode[,] roomNodes = new RoomNode[(map.GetLength(0) - 5) / 4, (map.GetLength(1) - 5) / 4];
         //RoomNode[,] roomNodes = new RoomNode[map.GetLength(0) / 4, map.GetLength(1) / 4];
         for (int x = 0; x < roomNodes.GetLength(0); x++)
         {
@@ -428,7 +428,7 @@ public class MapGeneratorRevised : MonoBehaviour
         List<Room> adjustedRooms = new List<Room>();
         foreach (Room room in rooms)
         {
-            adjustedRooms.Add(new Room(new Vector2Int(room.BottomLeft.x * 3, room.BottomLeft.y * 3), room.Width * 4, room.Height * 4));
+            adjustedRooms.Add(new Room(new Vector2Int(room.BottomLeft.x * 4, room.BottomLeft.y * 4), room.Width * 5, room.Height * 5));
         }
 
         /* Step 5 */
