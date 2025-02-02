@@ -575,7 +575,12 @@ MonoBehaviour:
   generateMap: 1
   usePathsFromLevel: 0
   useRoomsFromLevel: 0
+  roomWidthMax: 3
+  roomHeightMax: 3
+  roomGridExtra: 10
+  minRoomSize: 7
   wallPrefab: {fileID: 3532408704089409363, guid: 9bd69836cf3bc8a42a47a5a74fd820ad, type: 3}
+  pathPrefab: {fileID: 5318241218987947542, guid: d8fcd9ba6ab374b40a61c04a17ee90ec, type: 3}
 --- !u!4 &142691045732961215
 Transform:
   m_ObjectHideFlags: 0

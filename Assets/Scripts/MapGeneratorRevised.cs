@@ -17,7 +17,11 @@ public class MapGeneratorRevised : MonoBehaviour
 
     public int roomGridExtra = 10;
 
+    public int minRoomSize = 5;
+    private int minRoomMinus1;
+
     public GameObject wallPrefab;
+    public GameObject pathPrefab;
 
     private Texture2D[] paths;
 
@@ -25,6 +29,7 @@ public class MapGeneratorRevised : MonoBehaviour
     void Start()
     {
         paths = Resources.LoadAll<Texture2D>("Paths/Level " + usePathsFromLevel + " Paths");
+
     }
 
     // Update is called once per frame
@@ -32,6 +37,7 @@ public class MapGeneratorRevised : MonoBehaviour
     {
         if (generateMap)
         {
+            minRoomMinus1 = minRoomSize - 1;
             generateMap = false;
             GenerateMap();
         }
@@ -64,6 +70,7 @@ public class MapGeneratorRevised : MonoBehaviour
 
         /* Step 1: Randomly pick the path */
         Texture2D path = paths[UnityEngine.Random.Range(0, paths.Length)];
+        Debug.Log(path.name);
 
         /* Step 2: Follow along the path and record each position */
         Vector2Int startCenter;
@@ -172,12 +179,12 @@ public class MapGeneratorRevised : MonoBehaviour
 
         int mapXDimension = highest.x * 2 + roomGridExtra;//The extra space is to ensure that the path is fully contained.
         int mapYDimension = highest.y * 2 + roomGridExtra;
-        while ((mapXDimension - 5) % 4 != 0)
+        while ((mapXDimension - minRoomSize) % minRoomMinus1 != 0)
         {
             mapXDimension++;
         }
 
-        while ((mapYDimension - 5) % 4 != 0)
+        while ((mapYDimension - minRoomSize) % minRoomMinus1 != 0)
         {
             mapYDimension++;
         }
@@ -242,7 +249,7 @@ public class MapGeneratorRevised : MonoBehaviour
         pathParent.transform.parent = transform;
         foreach (Vector2Int position in criticalPathPositions)
         {
-            Instantiate(wallPrefab, new Vector3(position.x, 0, position.y), Quaternion.identity, pathParent.transform);
+            Instantiate(pathPrefab, new Vector3(position.x, 0, position.y), Quaternion.identity, pathParent.transform);
         }
     }
 
@@ -328,125 +335,134 @@ public class MapGeneratorRevised : MonoBehaviour
     private List<Room> GenerateRooms(bool[,] map)
     {
         /* Algorithm
-         * 1. Make a new RoomNode 2D array. It's sizes are (mapWidth - 4)/3 + 1 and (mapHeight - 4)/3 + 1.
+         * 1. Make a new RoomNode 2D array. It's sizes are condensed from the map input so that the rooms can later be scaled back up to the actual map sizes. just makes the math a little easier.
          *      1-2. Initialize every RoomNode to have no parent room.
-         *      1-3. As we're doing that, build up another list of Vector2Ints for each position on the RoomNode array.
-         * 2. Shuffle the list of RoomNode positions.
-         * 3. For each Vector2Int in the list, create a room of random size at that location on the map.
+         * 2. For each Vector2Int in the list, create a room of random size at that location on the map.
          *      3-2. Check if the room is valid; i.e. every position it encompasses does not already belong to a room.
          *      3-3. If the room is valid, add it to the list of rooms and mark every position it encompasses as belonging to the room.
          *      3-4. If the room is invalid, skrink it on one side by 1 and try again. Repeat until the room is valid or it is 1x1.
          *      3-5. If the RoomNode already has a room, skip it. this condition should end up handling the 1x1 rooms.
-         * 4. For each room, multiply the width, height, and position by 4.
-         * 5. Return the list of Rooms.
+         * 3. For each room, scale the width, height, and position so that it fits back onto the map.
+         * 4. Return the list of Rooms.
          */
 
         /* Step 1 */
         List<Room> rooms = new List<Room>();
-        List<Vector2Int> potentialRoomPositions = new List<Vector2Int>();
 
-        Debug.Log("(" + (map.GetLength(0) - 5) / 4 + ", " + (map.GetLength(1) - 5) / 4 + ")");
-
-        RoomNode[,] roomNodes = new RoomNode[(map.GetLength(0) - 5) / 4, (map.GetLength(1) - 5) / 4];
-        //RoomNode[,] roomNodes = new RoomNode[map.GetLength(0) / 4, map.GetLength(1) / 4];
+        RoomNode[,] roomNodes = new RoomNode[(map.GetLength(0) - minRoomSize) / minRoomMinus1, (map.GetLength(1) - minRoomSize) / minRoomMinus1];
         for (int x = 0; x < roomNodes.GetLength(0); x++)
         {
             for (int y = 0; y < roomNodes.GetLength(1); y++)
             {
                 roomNodes[x, y] = new RoomNode(null);
-                potentialRoomPositions.Add(new Vector2Int(x, y));
             }
         }
 
         /* Step 2 */
-        for (int i = 0; i < potentialRoomPositions.Count; i++)
+        int highestWidth = 1;
+        for(int x = 0; x < roomNodes.GetLength(0); x += highestWidth)
         {
-            Vector2Int temp = potentialRoomPositions[i];
-            int randomIndex = UnityEngine.Random.Range(i, potentialRoomPositions.Count);
-            potentialRoomPositions[i] = potentialRoomPositions[randomIndex];
-            potentialRoomPositions[randomIndex] = temp;
+            highestWidth = 1;
+
+            for (int y = 0; y < roomNodes.GetLength(1); y++)
+            {
+                Vector2Int position = new Vector2Int(x, y);
+
+                if (roomNodes[position.x, position.y].BelongsTo != null)
+                {
+                    continue;
+                }
+
+                int width = UnityEngine.Random.Range(1, roomWidthMax + 1);
+                int height = UnityEngine.Random.Range(1, roomHeightMax + 1);
+                Room room = new Room(position, width, height);
+
+                if (width > highestWidth)
+                {
+                    highestWidth = width;
+                }
+
+                bool validRoom = false;
+
+                while (!validRoom)
+                {
+                    validRoom = true;
+                    List<Vector2Int> encompassed = room.GetEncompasedPositions();
+
+                    foreach(Vector2Int encompassedPosition in encompassed)
+                    {
+                        if (encompassedPosition.x >= roomNodes.GetLength(0) || encompassedPosition.y >= roomNodes.GetLength(1) || roomNodes[encompassedPosition.x, encompassedPosition.y].BelongsTo != null)
+                        {
+                            validRoom = false;
+                            break;
+                        }
+                    }
+
+                    if (!validRoom)
+                    {
+                        if(room.Width == 1 && room.Height == 1)
+                        {
+                            Debug.LogError("Room is 1x1 and invalid");
+                            break;
+                        }
+
+                        int shrinkDirection = UnityEngine.Random.Range(0, 2);
+
+                        if (shrinkDirection == 0)
+                        {
+                            if (room.Width == 1)
+                            {
+                                room = new Room(room.BottomLeft, room.Width, room.Height - 1);
+                            }
+                            else
+                            {
+                                room = new Room(room.BottomLeft, room.Width - 1, room.Height);
+                            }
+                        }
+                        else
+                        {
+                            if (room.Height == 1)
+                            {
+                                room = new Room(room.BottomLeft, room.Width - 1, room.Height);
+                            }
+                            else
+                            {
+                                room = new Room(room.BottomLeft, room.Width, room.Height - 1);
+                            }
+                        }
+                    }
+                }
+
+                rooms.Add(room);
+                foreach (Vector2Int encompassedPosition in room.GetEncompasedPositions())
+                {
+                    roomNodes[encompassedPosition.x, encompassedPosition.y].BelongsTo = room;
+                }
+            }
+        }
+
+        for(int x = 0; x < roomNodes.GetLength(0); x++)
+        {
+            for (int y = 0; y < roomNodes.GetLength(1); y++)
+            {
+                if (roomNodes[x, y].BelongsTo == null)
+                {
+                    Room room = new Room(new Vector2Int(x, y), 1, 1);
+                    rooms.Add(room);
+                }
+            }
         }
 
         /* Step 3 */
-        foreach (Vector2Int position in potentialRoomPositions)
-        {
-            if(roomNodes[position.x, position.y].BelongsTo != null)
-            {
-                continue;
-            }
-
-            int width = UnityEngine.Random.Range(1, roomWidthMax + 1);
-            int height = UnityEngine.Random.Range(1, roomHeightMax + 1);
-            //width = 1;
-            //height = 1;
-            Room room = new Room(position, width, height);
-
-            bool validRoom = false;
-
-            while (!validRoom)
-            {
-                validRoom = true;
-                List<Vector2Int> encompassed = room.GetEncompasedPositions();
-
-                foreach(Vector2Int encompassedPosition in encompassed)
-                {
-                    if (encompassedPosition.x >= roomNodes.GetLength(0) || encompassedPosition.y >= roomNodes.GetLength(1) || roomNodes[encompassedPosition.x, encompassedPosition.y].BelongsTo != null)
-                    {
-                        validRoom = false;
-                        break;
-                    }
-                }
-
-                if (!validRoom)
-                {
-                    if(room.Width == 1 && room.Height == 1)
-                    {
-                        Debug.LogError("Room is 1x1 and invalid");
-                        break;
-                    }
-
-                    int shrinkDirection = UnityEngine.Random.Range(0, 2);
-
-                    if (shrinkDirection == 0)
-                    {
-                        if (room.Width == 1)
-                        {
-                            room = new Room(room.BottomLeft, room.Width, room.Height - 1);
-                        }
-                        else
-                        {
-                            room = new Room(room.BottomLeft, room.Width - 1, room.Height);
-                        }
-                    }
-                    else
-                    {
-                        if (room.Height == 1)
-                        {
-                            room = new Room(room.BottomLeft, room.Width - 1, room.Height);
-                        }
-                        else
-                        {
-                            room = new Room(room.BottomLeft, room.Width, room.Height - 1);
-                        }
-                    }
-                }
-            }
-
-            rooms.Add(room);
-            foreach (Vector2Int encompassedPosition in room.GetEncompasedPositions())
-            {
-                roomNodes[encompassedPosition.x, encompassedPosition.y].BelongsTo = room;
-            }
-        }
-
-        /* Step 4 */
         List<Room> adjustedRooms = new List<Room>();
         foreach (Room room in rooms)
         {
-            adjustedRooms.Add(new Room(new Vector2Int(room.BottomLeft.x * 4, room.BottomLeft.y * 4), room.Width * 5, room.Height * 5));
+            int wAccountForWallSharing = room.Width - 1;
+            int hAccountForWallSharing = room.Height - 1;
+            adjustedRooms.Add(new Room(new Vector2Int(room.BottomLeft.x * minRoomMinus1, room.BottomLeft.y * minRoomMinus1), room.Width * minRoomSize - wAccountForWallSharing, room.Height * minRoomSize - hAccountForWallSharing));
         }
 
-        /* Step 5 */
+        /* Step 4 */
         return adjustedRooms;
     }
 
