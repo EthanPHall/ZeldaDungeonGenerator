@@ -189,13 +189,28 @@ public class MapGeneratorRevised : MonoBehaviour
         /* Step 6: Break that 2D list into rectangles of random sizes. */
         List<Room> rooms = GenerateRooms(map);
 
-        /* Step 7: Set every bool along the rectangle edges to true. */
+        /* Step 7: Set every bool along the rectangle edges that intersect with the main path to true. */
         foreach (Room room in rooms)
         {
-            foreach (Vector2Int position in room.GetPerimeterPositions())
+            List<Vector2Int> perimeter = room.GetPerimeterPositions();
+
+            bool atLeastOneIntersection = false;
+            foreach(Vector2Int position in perimeter)
             {
-                Debug.Log(position.x + ", " + position.y);
-                Debug.Log("Room: " + room.BottomLeft.x + ", " + room.BottomLeft.y + " : " + room.Width + "x" + room.Height);
+                if (criticalPathPositions.Contains(position))
+                {
+                    atLeastOneIntersection = true;
+                    break;
+                }
+            }
+
+            if (!atLeastOneIntersection)
+            {
+                continue;
+            }
+
+            foreach (Vector2Int position in perimeter)
+            {
                 map[position.x, position.y] = true;
             }
         }
@@ -227,7 +242,7 @@ public class MapGeneratorRevised : MonoBehaviour
         pathParent.transform.parent = transform;
         foreach (Vector2Int position in criticalPathPositions)
         {
-            //Instantiate(wallPrefab, new Vector3(position.x, 0, position.y), Quaternion.identity, pathParent.transform);
+            Instantiate(wallPrefab, new Vector3(position.x, 0, position.y), Quaternion.identity, pathParent.transform);
         }
     }
 
@@ -360,10 +375,10 @@ public class MapGeneratorRevised : MonoBehaviour
                 continue;
             }
 
-            int width = UnityEngine.Random.Range(2, roomWidthMax + 1);
-            int height = UnityEngine.Random.Range(2, roomHeightMax + 1);
-            width = 1;
-            height = 1;
+            int width = UnityEngine.Random.Range(1, roomWidthMax + 1);
+            int height = UnityEngine.Random.Range(1, roomHeightMax + 1);
+            //width = 1;
+            //height = 1;
             Room room = new Room(position, width, height);
 
             bool validRoom = false;
