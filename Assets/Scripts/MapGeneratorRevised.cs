@@ -10,10 +10,12 @@ public class MapGeneratorRevised : MonoBehaviour
     public int usePathsFromLevel = 0;
     public int useRoomsFromLevel = 0;
 
-    [Range(1, 4)]
+    [Range(1, 10)]
     public int roomWidthMax = 4;
-    [Range(1, 4)]
+    [Range(1, 10)]
     public int roomHeightMax = 4;
+
+    public int roomGridExtra = 10;
 
     public GameObject wallPrefab;
 
@@ -168,28 +170,19 @@ public class MapGeneratorRevised : MonoBehaviour
         /*5.Declare a 2D array / list of booleans to represent the map. The size of the array is the highest x and y values from step 3 multiplied by 2, plus at least 2.
          *  5 - 2.From there, we need to make sure that both dimensions of the map, -4, are divisible by 3.Rooms can and should share edges.*/
 
-        int mapXDimension = highest.x * 2 + 2;
-        int mapYDimension = highest.y * 2 + 2;
-
-        //while(mapXDimension - 4 % 3 != 0)
-        //{
-        //    mapXDimension++;
-        //}
-
-        //while(mapYDimension - 4 % 3 != 0)
-        //{
-        //    mapYDimension++;
-        //}
-
-        while(mapXDimension % 4 != 0)
+        int mapXDimension = highest.x * 2 + roomGridExtra;//The extra space is to ensure that the path is fully contained.
+        int mapYDimension = highest.y * 2 + roomGridExtra;
+        while ((mapXDimension - 4) % 3 != 0 && ((mapXDimension - 4) % 3) % 2 == 0)
         {
             mapXDimension++;
         }
 
-        while (mapYDimension % 4 != 0)
+        while ((mapYDimension - 4) % 3 != 0 && ((mapYDimension - 4) % 3) % 2 == 0)
         {
             mapYDimension++;
         }
+
+        Debug.Log("Map dimensions: " + mapXDimension + "x" + mapYDimension);
 
         bool[,] map = new bool[mapXDimension, mapYDimension];
 
@@ -201,6 +194,8 @@ public class MapGeneratorRevised : MonoBehaviour
         {
             foreach (Vector2Int position in room.GetPerimeterPositions())
             {
+                Debug.Log(position.x + ", " + position.y);
+                Debug.Log("Room: " + room.BottomLeft.x + ", " + room.BottomLeft.y + " : " + room.Width + "x" + room.Height);
                 map[position.x, position.y] = true;
             }
         }
@@ -335,8 +330,10 @@ public class MapGeneratorRevised : MonoBehaviour
         List<Room> rooms = new List<Room>();
         List<Vector2Int> potentialRoomPositions = new List<Vector2Int>();
 
-        //RoomNode[,] roomNodes = new RoomNode[(map.GetLength(0) - 4)/3 + 1, (map.GetLength(0) - 4) / 3 + 1];
-        RoomNode[,] roomNodes = new RoomNode[map.GetLength(0) / 4, map.GetLength(1) / 4];
+        Debug.Log("(" + (map.GetLength(0) - 4) / 3 + ", " + (map.GetLength(1) - 4) / 3 + ")");
+
+        RoomNode[,] roomNodes = new RoomNode[(map.GetLength(0) - 4) / 3, (map.GetLength(1) - 4) / 3];
+        //RoomNode[,] roomNodes = new RoomNode[map.GetLength(0) / 4, map.GetLength(1) / 4];
         for (int x = 0; x < roomNodes.GetLength(0); x++)
         {
             for (int y = 0; y < roomNodes.GetLength(1); y++)
@@ -363,8 +360,8 @@ public class MapGeneratorRevised : MonoBehaviour
                 continue;
             }
 
-            int width = UnityEngine.Random.Range(1, roomWidthMax + 1);
-            int height = UnityEngine.Random.Range(1, roomHeightMax + 1);
+            int width = UnityEngine.Random.Range(2, roomWidthMax + 1);
+            int height = UnityEngine.Random.Range(2, roomHeightMax + 1);
             width = 1;
             height = 1;
             Room room = new Room(position, width, height);
@@ -431,7 +428,7 @@ public class MapGeneratorRevised : MonoBehaviour
         List<Room> adjustedRooms = new List<Room>();
         foreach (Room room in rooms)
         {
-            adjustedRooms.Add(new Room(new Vector2Int(Mathf.Max(room.BottomLeft.x * 4 - 1, 0), Mathf.Max(room.BottomLeft.y * 4 - 1, 0)), room.Width * 4, room.Height * 4));
+            adjustedRooms.Add(new Room(new Vector2Int(room.BottomLeft.x * 3, room.BottomLeft.y * 3), room.Width * 4, room.Height * 4));
         }
 
         /* Step 5 */
