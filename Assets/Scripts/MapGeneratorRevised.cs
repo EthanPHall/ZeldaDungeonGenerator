@@ -60,33 +60,21 @@ public partial class MapGeneratorRevised : MonoBehaviour
             Destroy(child.gameObject);
         }
 
-        /* Map Generation Algorithm
-         * 1. Choose which critical path to use.
-         * 2. Follow along the path and record each position
-         *      2-1. Keep track of 4 values: lowest and highest x and y values
-         *      2-2. The start point is considered 0,0 so positions may be positive or negative
-         * 3. If the lowest x value is negative, shift all x values to the right by that amount. Do the same for y values.
-         * 4. Multiply each position from step 2 by 2 and then add 1,1 to each position. Doing this offsets the critical path and ensures that
-         *    its edges do not align with the room edges that will be generated later.
-         * 5. Declare a 2D array/list of booleans to represent the map. The size of the array is the highest x and y values from step 3 multiplied by 2, plus at least 2.
-         *      5-2. From there, we need to make sure that both dimensions of the map, -4, are divisible by 3. Rooms can and should share edges.
-         * 6. Break that 2D list into rectangles of random sizes.
-         * 7. Set every bool along the rectangle edges to true.
-         * 8. Set every bool along the critical path to false. These are the openings.
-         * 9. Merge openings that lead from 1 room to 1 other room.
-         * 10. Generate a wall in the world for each true value in the 2D list.
-         */
-
-        /* Step 1: Randomly pick the path */
+        /* Randomly pick the path */
         Texture2D path = paths[UnityEngine.Random.Range(0, paths.Length)];
         Debug.Log(path.name);
 
-        /* Step 2: Follow along the path and record each position */
+        /* Follow along the path and record each position */
         Vector2Int startCenter;
         Queue<CriticalPathVisitor> branchStarters = GetCriticalPathVisitors(path, out startCenter);
         Vector2Int offsetSoStartIs00 = new Vector2Int(-startCenter.x, -startCenter.y);
 
         List<Vector2Int> criticalPathPositions = new List<Vector2Int>();
+        List<Vector2Int> nonBossBranches = new List<Vector2Int>();
+        List<Vector2Int> bossBranches = new List<Vector2Int>();
+
+        List<Vector2Int> branchEndPositions = new List<Vector2Int>();
+
         Vector2Int lowest = new Vector2Int(int.MaxValue, int.MaxValue);
         Vector2Int highest = new Vector2Int(int.MinValue, int.MinValue);
 
@@ -99,6 +87,11 @@ public partial class MapGeneratorRevised : MonoBehaviour
         foreach(CriticalPathVisitor branchStarter in branchStarters)
         {
             MoveReport moveReport = null;
+            Vector2Int positionAfterOffset;
+
+            Vector2Int branchStartToCenterOffset = new Vector2Int(startCenter.x - branchStarter.Position.x, startCenter.y - branchStarter.Position.y);
+            List<Vector2Int> currentBranch = new List<Vector2Int>();
+
             do
             {
                 VisitReport visitReport = branchStarter.Visit();
@@ -108,9 +101,9 @@ public partial class MapGeneratorRevised : MonoBehaviour
                     return;
                 }
 
-                Vector2Int positionAfterOffset = branchStarter.Position + offsetSoStartIs00;
+                positionAfterOffset = branchStarter.Position + offsetSoStartIs00 + branchStartToCenterOffset;
 
-                criticalPathPositions.Add(positionAfterOffset);
+                currentBranch.Add(positionAfterOffset);
                 
                 if(positionAfterOffset.x < lowest.x)
                 {
@@ -131,9 +124,25 @@ public partial class MapGeneratorRevised : MonoBehaviour
 
                 moveReport = branchStarter.MoveOn();
             } while (moveReport == null || !moveReport.VisitorIsDone);
+            
+            branchEndPositions.Add(positionAfterOffset);
+
+            if(branchStarter.ReachedBossRoom)
+            {
+                bossBranches.AddRange(currentBranch);
+            }
+            else
+            {
+                nonBossBranches.AddRange(currentBranch);
+            }
         }
 
-        /* Step 3: If the lowest x value is negative, shift all x values to the right by that amount. Do the same for y values. */
+        criticalPathPositions.AddRange(nonBossBranches);
+        criticalPathPositions.AddRange(bossBranches);
+
+        Debug.Log("BranchEndPositions.Count: " + branchEndPositions.Count); 
+
+        /* If the lowest x value is negative, shift all x values to the right by that amount. Do the same for y values. */
         Vector2Int offsetForNegatives = new Vector2Int(0, 0);
         if(lowest.x < 0)
         {
@@ -148,18 +157,27 @@ public partial class MapGeneratorRevised : MonoBehaviour
         {
             criticalPathPositions[i] += offsetForNegatives;
         }
+        for(int i = 0; i < branchEndPositions.Count; i++)
+        {
+            branchEndPositions[i] += offsetForNegatives;
+        }
 
         highest += offsetForNegatives;
         lowest += offsetForNegatives;
 
-        /* Step 4: Multiply each position from step 2 by 2 and then add 1,1 to each position. Doing this offsets the critical path and ensures that
-         * its edges do not align with the room edges that will be generated later. */
+        /* Multiply each position from step 2 by 2 and then add 1,1 to each position. Doing this offsets the critical path and ensures that
+         * its edges do not align with the room edges that will be generated later. The rooms do need to have odd dimensions for this to work. */
         for (int i = 0; i < criticalPathPositions.Count; i++)
         {
             criticalPathPositions[i] = criticalPathPositions[i] * 2 + Vector2Int.one;
         }
+        for (int i = 0; i < branchEndPositions.Count; i++)
+        {
+            branchEndPositions[i] = branchEndPositions[i] * 2 + Vector2Int.one;
+        }
 
         //Also fill in the empty spaces now between critical path locations.
+        Debug.Log("Critical path length: " + criticalPathPositions.Count);
         List<Vector2Int> newPlusSortedPositions = new List<Vector2Int>();
         for (int i = 0, j = 1; i < criticalPathPositions.Count - 1; i++, j++)
         {
@@ -173,6 +191,11 @@ public partial class MapGeneratorRevised : MonoBehaviour
                 break;
             }
 
+            if (branchEndPositions.Contains(currentPosition))
+            {
+                continue;
+            }
+
             Vector2Int difference = nextPosition - currentPosition;
             int xNormalizer = difference.x == 0 ? 1 : Mathf.Abs(difference.x); //Set to 1 in the case of 0 to avoid divide by 0 errors.
             int yNormalizer = difference.y == 0 ? 1 : Mathf.Abs(difference.y);
@@ -184,14 +207,14 @@ public partial class MapGeneratorRevised : MonoBehaviour
             }
         }
         criticalPathPositions = newPlusSortedPositions;
+        Debug.Log("criticalPathPositions.Count: " + criticalPathPositions.Count);
 
-        /*5.Declare a 2D array / list of booleans to represent the map. The size of the array is the highest x and y values from step 3 multiplied by 2, plus at least 2.
-         *  5 - 2.From there, we need to make sure that both dimensions of the map, -4, are divisible by 3.Rooms can and should share edges.*/
-
+        /* Create a representation of the map */
         int mapXDimension = highest.x * 2 + roomGridExtra;//The extra space is to ensure that the path is fully contained.
         int mapYDimension = highest.y * 2 + roomGridExtra;
         while ((mapXDimension - minRoomSize) % minRoomMinus1 != 0)
         {
+            //(mapXDimension - minRoomSize) % minRoomMinus1: Rooms share walls, so that needs to be taken into account when determining the map dimensions.
             mapXDimension++;
         }
 
@@ -204,10 +227,10 @@ public partial class MapGeneratorRevised : MonoBehaviour
 
         bool[,] map = new bool[mapXDimension, mapYDimension];
 
-        /* Step 6: Break that 2D list into rectangles of random sizes. */
+        /* Break that 2D list into rectangles of random sizes. */
         List<Room> rooms = GenerateRooms(map);
 
-        /* Step 7: Set every bool along the rectangle edges that intersect with the main path to true. */
+        /* Set every bool along the rectangle edges that intersect with the main path to true. These are our walls. */
         foreach (Room room in rooms)
         {
             List<Vector2Int> perimeter = room.GetPerimeterPositions();
@@ -252,7 +275,7 @@ public partial class MapGeneratorRevised : MonoBehaviour
             }
         }
 
-        /* Step 8: Set every bool along the critical path to false. These are the openings. */
+        /* Set every bool along the critical path to false. These are the openings. */
         List<Vector2Int> openings = new List<Vector2Int>();
         foreach (Vector2Int position in criticalPathPositions)
         {
@@ -264,10 +287,10 @@ public partial class MapGeneratorRevised : MonoBehaviour
             map[position.x, position.y] = false;
         }
 
-        /* Step 9: Merge openings that lead from 1 room to 1 other room. */
+        /* Merge openings that lead from 1 room to 1 other room. */
         //TODO: Implement this step
 
-        /* Step 10: Generate a wall in the world for each true value in the 2D list. */
+        /* Generate a wall in the world for each true value in the 2D list. */
         GameObject mapParent = new GameObject("Map Parent");
         mapParent.transform.parent = transform;
         for (int x = 0; x < map.GetLength(0); x++)
@@ -288,11 +311,11 @@ public partial class MapGeneratorRevised : MonoBehaviour
             Instantiate(pathPrefab, new Vector3(position.x, 0, position.y), Quaternion.identity, pathParent.transform);
         }
 
-        /* Step 11: Generate locks and keys */
-        GenerateLocksAndKeys(criticalPathPositions, openings, correspondingRooms, rooms);
+        /* Generate locks and keys */
+        GenerateLocksAndKeys(criticalPathPositions, openings, correspondingRooms, rooms, branchEndPositions);
     }
 
-    public void GenerateLocksAndKeys(List<Vector2Int> criticalPathPositions, List<Vector2Int> openings, List<Room> correspondingRooms, List<Room> allRooms)
+    public void GenerateLocksAndKeys(List<Vector2Int> criticalPathPositions, List<Vector2Int> openings, List<Room> correspondingRooms, List<Room> allRooms, List<Vector2Int> branchEndPositions)
     {
         Queue<Key> unplacedKeys = new Queue<Key>();
         unplacedKeys.Enqueue(new Key(KeyColorsUtil.GetBossColor()));
@@ -406,6 +429,10 @@ public partial class MapGeneratorRevised : MonoBehaviour
                         unplacedKeys.Enqueue(newKey);
                     }
                 }
+            }
+            else if (branchEndPositions.Contains(position))
+            {
+                toCloneForNextOpening = null;
             }
 
             spacesSinceLastLock++;

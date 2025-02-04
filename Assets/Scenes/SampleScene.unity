@@ -577,7 +577,7 @@ MonoBehaviour:
   useRoomsFromLevel: 0
   roomWidthMax: 3
   roomHeightMax: 3
-  roomGridExtra: 10
+  roomGridExtra: 30
   minRoomSize: 9
   minGoalForKeys: 3
   maxGoalForKeys: 5
