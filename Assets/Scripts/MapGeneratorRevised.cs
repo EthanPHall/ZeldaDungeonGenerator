@@ -207,7 +207,9 @@ public partial class MapGeneratorRevised : MonoBehaviour
             }
         }
         criticalPathPositions = newPlusSortedPositions;
+        RemoveDuplicatePositions(criticalPathPositions);
         Debug.Log("criticalPathPositions.Count: " + criticalPathPositions.Count);
+
 
         /* Create a representation of the map */
         int mapXDimension = highest.x * 2 + roomGridExtra;//The extra space is to ensure that the path is fully contained.
@@ -315,6 +317,21 @@ public partial class MapGeneratorRevised : MonoBehaviour
         GenerateLocksAndKeys(criticalPathPositions, openings, correspondingRooms, rooms, branchEndPositions);
     }
 
+    public void RemoveDuplicatePositions(List<Vector2Int> positions)
+    {
+        for (int i = 0; i < positions.Count; i++)
+        {
+            for (int j = i + 1; j < positions.Count; j++)
+            {
+                if (positions[i] == positions[j])
+                {
+                    positions.RemoveAt(j);
+                    j--;
+                }
+            }
+        }
+    }   
+
     public void GenerateLocksAndKeys(List<Vector2Int> criticalPathPositions, List<Vector2Int> openings, List<Room> correspondingRooms, List<Room> allRooms, List<Vector2Int> branchEndPositions)
     {
         Queue<Key> unplacedKeys = new Queue<Key>();
@@ -401,6 +418,7 @@ public partial class MapGeneratorRevised : MonoBehaviour
                     if (toPlace != null)
                     {
                         toPlace.SetRoomParent(correspondingRooms[nextNonOpeningIndex]);
+                        Debug.Log(correspondingRooms[nextNonOpeningIndex] == null);
                         correspondingRooms[nextNonOpeningIndex].AddKey(toPlace);
                         placedKeys.Add(toPlace);
                     }
