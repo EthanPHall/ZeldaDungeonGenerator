@@ -137,6 +137,8 @@ public partial class MapGeneratorRevised : MonoBehaviour
                 moveReport = currentBranchStarter.MoveOn();
             } while (moveReport == null || !moveReport.VisitorIsDone);
             
+            Debug.LogWarning("Visited COunt in branch: " + visited.Count);
+
             branchEndPositions.Add(positionAfterOffset);
 
             if (!currentBranchStarter.ShouldDiscardBranch)
@@ -155,9 +157,17 @@ public partial class MapGeneratorRevised : MonoBehaviour
                 Debug.Log("Branch discarded");
             }
 
-            foreach(CriticalPathVisitor newBranchStarter in currentBranchStarter.NewBranchStarters)
+            Debug.LogWarning(currentBranchStarter.NewBranchStarters.Count);
+            foreach (Vector2Int position in bossBranches)
             {
-                Debug.Log("New branch starter found");
+                currentBranchStarter.RemovePotentialVisitorsGivenLocation(position - currentBranchStarter.PositionsOffsetBy);
+            }
+            foreach (Vector2Int position in nonBossBranches)
+            {
+                currentBranchStarter.RemovePotentialVisitorsGivenLocation(position - currentBranchStarter.PositionsOffsetBy);
+            }
+            foreach (CriticalPathVisitor newBranchStarter in currentBranchStarter.NewBranchStarters)
+            {
                 branchStarters.Enqueue(newBranchStarter);
             }
 
@@ -348,7 +358,7 @@ public partial class MapGeneratorRevised : MonoBehaviour
         }
 
         /* Generate locks and keys */
-        GenerateLocksAndKeys(criticalPathPositions, openings, correspondingRooms, rooms, branchEndPositions);
+        GenerateLocksAndKeys(criticalPathPositions, openings, correspondingRooms, rooms, branchEndPositions, mapParent);
     }
 
     public void RemoveDuplicatePositions(List<Vector2Int> positions)
@@ -366,7 +376,7 @@ public partial class MapGeneratorRevised : MonoBehaviour
         }
     }   
 
-    public void GenerateLocksAndKeys(List<Vector2Int> criticalPathPositions, List<Vector2Int> openings, List<Room> correspondingRooms, List<Room> allRooms, List<Vector2Int> branchEndPositions)
+    public void GenerateLocksAndKeys(List<Vector2Int> criticalPathPositions, List<Vector2Int> openings, List<Room> correspondingRooms, List<Room> allRooms, List<Vector2Int> branchEndPositions, GameObject mapParent)
     {
         Queue<Key> unplacedKeys = new Queue<Key>();
         unplacedKeys.Enqueue(new Key(KeyColorsUtil.GetBossColor()));
@@ -452,7 +462,6 @@ public partial class MapGeneratorRevised : MonoBehaviour
                     if (toPlace != null)
                     {
                         toPlace.SetRoomParent(correspondingRooms[nextNonOpeningIndex]);
-                        Debug.Log(correspondingRooms[nextNonOpeningIndex] == null);
                         correspondingRooms[nextNonOpeningIndex].AddKey(toPlace);
                         placedKeys.Add(toPlace);
                     }
@@ -520,7 +529,7 @@ public partial class MapGeneratorRevised : MonoBehaviour
 
         foreach (Vector2Int wallPosition in newWallLocations)
         {
-            Instantiate(wallPrefab, new Vector3(wallPosition.x, 0, wallPosition.y), Quaternion.identity);
+            Instantiate(wallPrefab, new Vector3(wallPosition.x, 0, wallPosition.y), Quaternion.identity, mapParent.transform);
         }
 
         GameObject lockParent = new GameObject("Lock Parent");

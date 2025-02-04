@@ -494,8 +494,29 @@ public class CriticalPathVisitor: PixelVisitor
         positionsOffsetBy = offset;
     }
 
+    public Vector2Int OffsetPosition
+    {
+        get { return position + positionsOffsetBy; }
+    }
+
+    public void RemovePotentialVisitorsGivenLocation(Vector2Int visitedLocation)
+    {
+        int index = correspondingBranchStarterPositions.IndexOf(visitedLocation);
+        while (index != -1) 
+        {
+            Debug.Log("Removing branch");
+
+            newBranchStarters.RemoveAt(index);
+            correspondingBranchStarterPositions.RemoveAt(index);
+
+            index = correspondingBranchStarterPositions.IndexOf(visitedLocation);
+        }
+    }
+
     public override VisitReport Visit()
     {
+        Debug.Log("Visitor Position: " + position); 
+
         VisitReport visitReport = base.Visit();
 
         if (visited.Contains(position))
@@ -509,10 +530,13 @@ public class CriticalPathVisitor: PixelVisitor
         }
 
         int starterOverlapIndex = correspondingBranchStarterPositions.IndexOf(position);
-        if (starterOverlapIndex != -1)
+
+        while(starterOverlapIndex != -1)
         {
+            //Debug.Log("Removing branch starter at " + position);
             newBranchStarters.RemoveAt(starterOverlapIndex);
             correspondingBranchStarterPositions.RemoveAt(starterOverlapIndex);
+            starterOverlapIndex = correspondingBranchStarterPositions.IndexOf(position);
         }
 
         visited.Add(position);
@@ -524,6 +548,7 @@ public class CriticalPathVisitor: PixelVisitor
     {
         if(alreadyVisitedCount > 1)
         {
+            Debug.Log("Already visited " + alreadyVisitedCount + " times at " + position);
             isDone = true;
             return new MoveReport(false, isDone);
         }
