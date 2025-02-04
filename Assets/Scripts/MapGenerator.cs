@@ -429,9 +429,12 @@ public class CriticalPathVisitor: PixelVisitor
     private int sectionNumber;
     private RoomSeed previousSeed = null;
     private CriticalPathVisitor successorOf = null;
+    private Vector2Int successorPositionWhenBranched = new Vector2Int(int.MinValue, int.MinValue);
     private bool reachedBossRoom = false;
     private int alreadyVisitedCount = 0;
     private bool didBranchEvenStart = false;
+
+    private Vector2Int positionsOffsetBy = Vector2Int.zero;
 
     private List<Vector2Int> visited = new List<Vector2Int>();
     private List<CriticalPathVisitor> newBranchStarters = new List<CriticalPathVisitor>();
@@ -464,13 +467,32 @@ public class CriticalPathVisitor: PixelVisitor
         set { previousSeed = value; } 
     }
 
-    public CriticalPathVisitor BuildingOffOf { get { return successorOf; } set { successorOf = value; } }
+    public CriticalPathVisitor SuccessorOf { get { return successorOf; } }
+
+    public void SetPredecessor(CriticalPathVisitor predecessor)
+    {
+        this.successorOf = predecessor;
+        positionsOffsetBy = predecessor.PositionsOffsetBy;
+        successorPositionWhenBranched = predecessor.Position;
+
+        //Not sure why this math is necessary, but it does keep the branch starting poiints from having a gap between themselves and the parent branch they spawned from.
+        positionsOffsetBy += DirectionsUtil.GetDirectionVector(DirectionsUtil.GetOppositeDirection(direction));
+    }
 
     public bool ReachedBossRoom { get { return reachedBossRoom; } }
 
     public bool ShouldDiscardBranch { get { return !didBranchEvenStart; } }
 
     public List<CriticalPathVisitor> NewBranchStarters { get { return newBranchStarters; } }
+
+    public List<Vector2Int> CorrespondingBranchStarterPositions { get { return correspondingBranchStarterPositions; } }
+
+    public Vector2Int PositionsOffsetBy { get { return positionsOffsetBy; } }
+
+    public void SetPositionsOffsetBy(Vector2Int offset)
+    {
+        positionsOffsetBy = offset;
+    }
 
     public override VisitReport Visit()
     {
@@ -522,7 +544,7 @@ public class CriticalPathVisitor: PixelVisitor
                 if (successfullyMoved && neighbor.Color.Equals(Color.red))
                 {
                     CriticalPathVisitor newBranchStarter = new CriticalPathVisitor(new Vector2Int(neighbor.X, neighbor.Y), potentialDirection, toVisit, sectionNumber, visited);
-                    newBranchStarter.BuildingOffOf = this;
+                    newBranchStarter.SetPredecessor(this);
 
                     newBranchStarters.Add(newBranchStarter);
                     correspondingBranchStarterPositions.Add(newBranchStarter.Position);

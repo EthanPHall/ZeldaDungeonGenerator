@@ -68,6 +68,7 @@ public partial class MapGeneratorRevised : MonoBehaviour
         Vector2Int startCenter;
         List<Vector2Int> visited = new List<Vector2Int>();
         Queue<CriticalPathVisitor> branchStarters = GetCriticalPathVisitors(path, out startCenter, visited);
+        List<CriticalPathVisitor> initialVisitors = new List<CriticalPathVisitor>(branchStarters);
         Vector2Int offsetSoStartIs00 = new Vector2Int(-startCenter.x, -startCenter.y);
 
         List<Vector2Int> criticalPathPositions = new List<Vector2Int>();
@@ -87,13 +88,20 @@ public partial class MapGeneratorRevised : MonoBehaviour
 
         int preventInfiniteLoop = 0;
         CriticalPathVisitor currentBranchStarter = branchStarters.Dequeue();
-        while (currentBranchStarter != null && preventInfiniteLoop < 999)
+        while (currentBranchStarter != null && preventInfiniteLoop < 9999)
         {
             preventInfiniteLoop++;
             MoveReport moveReport = null;
             Vector2Int positionAfterOffset;
 
-            Vector2Int branchStartToCenterOffset = new Vector2Int(startCenter.x - currentBranchStarter.Position.x, startCenter.y - currentBranchStarter.Position.y);
+            Vector2Int branchStartToCenterOffset = Vector2Int.zero;
+
+            if (initialVisitors.Contains(currentBranchStarter))
+            {
+                branchStartToCenterOffset = new Vector2Int(startCenter.x - currentBranchStarter.Position.x, startCenter.y - currentBranchStarter.Position.y);
+                currentBranchStarter.SetPositionsOffsetBy(offsetSoStartIs00 + branchStartToCenterOffset);
+            }
+
             List<Vector2Int> currentBranch = new List<Vector2Int>();
 
             do
@@ -105,7 +113,7 @@ public partial class MapGeneratorRevised : MonoBehaviour
                     return;
                 }
 
-                positionAfterOffset = currentBranchStarter.Position + offsetSoStartIs00 + branchStartToCenterOffset;
+                positionAfterOffset = currentBranchStarter.Position + currentBranchStarter.PositionsOffsetBy;
 
                 currentBranch.Add(positionAfterOffset);
                 
@@ -131,9 +139,9 @@ public partial class MapGeneratorRevised : MonoBehaviour
             
             branchEndPositions.Add(positionAfterOffset);
 
-            if (true || !currentBranchStarter.ShouldDiscardBranch)
+            if (!currentBranchStarter.ShouldDiscardBranch)
             {
-                if(currentBranchStarter.ReachedBossRoom)
+                if (currentBranchStarter.ReachedBossRoom)
                 {
                     bossBranches.AddRange(currentBranch);
                 }
@@ -142,14 +150,24 @@ public partial class MapGeneratorRevised : MonoBehaviour
                     nonBossBranches.AddRange(currentBranch);
                 }
             }
-
+            else
+            {
+                Debug.Log("Branch discarded");
+            }
 
             foreach(CriticalPathVisitor newBranchStarter in currentBranchStarter.NewBranchStarters)
             {
-                //branchStarters.Enqueue(newBranchStarter);
+                Debug.Log("New branch starter found");
+                branchStarters.Enqueue(newBranchStarter);
             }
 
             currentBranchStarter = branchStarters.Count > 0 ? branchStarters.Dequeue() : null;
+        }
+
+        if(preventInfiniteLoop >= 9999)
+        {
+            Debug.LogError("Prevent infinite loop reached");
+            return;
         }
 
         criticalPathPositions.AddRange(nonBossBranches);
