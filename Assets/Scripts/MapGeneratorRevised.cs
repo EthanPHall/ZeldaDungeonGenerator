@@ -66,7 +66,8 @@ public partial class MapGeneratorRevised : MonoBehaviour
 
         /* Follow along the path and record each position */
         Vector2Int startCenter;
-        Queue<CriticalPathVisitor> branchStarters = GetCriticalPathVisitors(path, out startCenter);
+        List<Vector2Int> visited = new List<Vector2Int>();
+        Queue<CriticalPathVisitor> branchStarters = GetCriticalPathVisitors(path, out startCenter, visited);
         Vector2Int offsetSoStartIs00 = new Vector2Int(-startCenter.x, -startCenter.y);
 
         List<Vector2Int> criticalPathPositions = new List<Vector2Int>();
@@ -84,24 +85,27 @@ public partial class MapGeneratorRevised : MonoBehaviour
             return;
         }
 
-        foreach(CriticalPathVisitor branchStarter in branchStarters)
+        int preventInfiniteLoop = 0;
+        CriticalPathVisitor currentBranchStarter = branchStarters.Dequeue();
+        while (currentBranchStarter != null && preventInfiniteLoop < 999)
         {
+            preventInfiniteLoop++;
             MoveReport moveReport = null;
             Vector2Int positionAfterOffset;
 
-            Vector2Int branchStartToCenterOffset = new Vector2Int(startCenter.x - branchStarter.Position.x, startCenter.y - branchStarter.Position.y);
+            Vector2Int branchStartToCenterOffset = new Vector2Int(startCenter.x - currentBranchStarter.Position.x, startCenter.y - currentBranchStarter.Position.y);
             List<Vector2Int> currentBranch = new List<Vector2Int>();
 
             do
             {
-                VisitReport visitReport = branchStarter.Visit();
+                VisitReport visitReport = currentBranchStarter.Visit();
                 if (!visitReport.WasSuccessful)
                 {
                     Debug.LogError("Branch starter visit failed");
                     return;
                 }
 
-                positionAfterOffset = branchStarter.Position + offsetSoStartIs00 + branchStartToCenterOffset;
+                positionAfterOffset = currentBranchStarter.Position + offsetSoStartIs00 + branchStartToCenterOffset;
 
                 currentBranch.Add(positionAfterOffset);
                 
@@ -122,25 +126,37 @@ public partial class MapGeneratorRevised : MonoBehaviour
                     highest.y = positionAfterOffset.y;
                 }
 
-                moveReport = branchStarter.MoveOn();
+                moveReport = currentBranchStarter.MoveOn();
             } while (moveReport == null || !moveReport.VisitorIsDone);
             
             branchEndPositions.Add(positionAfterOffset);
 
-            if(branchStarter.ReachedBossRoom)
+            if (true || !currentBranchStarter.ShouldDiscardBranch)
             {
-                bossBranches.AddRange(currentBranch);
+                if(currentBranchStarter.ReachedBossRoom)
+                {
+                    bossBranches.AddRange(currentBranch);
+                }
+                else
+                {
+                    nonBossBranches.AddRange(currentBranch);
+                }
             }
-            else
+
+
+            foreach(CriticalPathVisitor newBranchStarter in currentBranchStarter.NewBranchStarters)
             {
-                nonBossBranches.AddRange(currentBranch);
+                //branchStarters.Enqueue(newBranchStarter);
             }
+
+            currentBranchStarter = branchStarters.Count > 0 ? branchStarters.Dequeue() : null;
         }
 
         criticalPathPositions.AddRange(nonBossBranches);
         criticalPathPositions.AddRange(bossBranches);
 
         Debug.Log("BranchEndPositions.Count: " + branchEndPositions.Count); 
+        Debug.Log("Visited.COunt: " + visited.Count);
 
         /* If the lowest x value is negative, shift all x values to the right by that amount. Do the same for y values. */
         Vector2Int offsetForNegatives = new Vector2Int(0, 0);
@@ -630,7 +646,7 @@ public partial class MapGeneratorRevised : MonoBehaviour
         return adjustedRooms;
     }
 
-    private Queue<CriticalPathVisitor> GetCriticalPathVisitors(Texture2D path, out Vector2Int startCenter)
+    private Queue<CriticalPathVisitor> GetCriticalPathVisitors(Texture2D path, out Vector2Int startCenter, List<Vector2Int> visited)
     {
         Vector2Int startingPoint = new Vector2Int(-1, -1);
         Vector2Int endPoint = new Vector2Int(-1, -1);
@@ -693,7 +709,7 @@ public partial class MapGeneratorRevised : MonoBehaviour
                 if (neighbor.Color == Color.red)
                 {
                     Directions branchSeedDirection = visitReport.Neighbors.GetDirectionOfNeighbor(neighbor);
-                    branchStarters.Enqueue(new CriticalPathVisitor(new Vector2Int(neighbor.X, neighbor.Y), branchSeedDirection, path, 0));
+                    branchStarters.Enqueue(new CriticalPathVisitor(new Vector2Int(neighbor.X, neighbor.Y), branchSeedDirection, path, 0, visited));
                 }
             }
 

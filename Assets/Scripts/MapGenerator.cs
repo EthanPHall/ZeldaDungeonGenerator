@@ -1,3 +1,4 @@
+using JetBrains.Annotations;
 using OpenCover.Framework.Model;
 using System;
 using System.Collections;
@@ -429,10 +430,22 @@ public class CriticalPathVisitor: PixelVisitor
     private RoomSeed previousSeed = null;
     private CriticalPathVisitor successorOf = null;
     private bool reachedBossRoom = false;
+    private int alreadyVisitedCount = 0;
+    private bool didBranchEvenStart = false;
+
+    private List<Vector2Int> visited = new List<Vector2Int>();
+    private List<CriticalPathVisitor> newBranchStarters = new List<CriticalPathVisitor>();
+    private List<Vector2Int> correspondingBranchStarterPositions = new List<Vector2Int>();
 
     public CriticalPathVisitor(Vector2Int position, Directions direction, Texture2D toVisit, int sectionNumber) : base(position, direction, toVisit)
     {
         this.sectionNumber = sectionNumber;
+    }
+
+    public CriticalPathVisitor(Vector2Int position, Directions direction, Texture2D toVisit, int sectionNumber, List<Vector2Int> visited) : base(position, direction, toVisit)
+    {
+        this.sectionNumber = sectionNumber;
+        this.visited = visited;
     }
 
     public int SectionNumber { get { return sectionNumber; } }
@@ -455,9 +468,43 @@ public class CriticalPathVisitor: PixelVisitor
 
     public bool ReachedBossRoom { get { return reachedBossRoom; } }
 
+    public bool ShouldDiscardBranch { get { return !didBranchEvenStart; } }
+
+    public List<CriticalPathVisitor> NewBranchStarters { get { return newBranchStarters; } }
+
+    public override VisitReport Visit()
+    {
+        VisitReport visitReport = base.Visit();
+
+        if (visited.Contains(position))
+        {
+            alreadyVisitedCount++;
+        }
+        else
+        {
+            didBranchEvenStart = true;
+            alreadyVisitedCount = 0;
+        }
+
+        int starterOverlapIndex = correspondingBranchStarterPositions.IndexOf(position);
+        if (starterOverlapIndex != -1)
+        {
+            newBranchStarters.RemoveAt(starterOverlapIndex);
+            correspondingBranchStarterPositions.RemoveAt(starterOverlapIndex);
+        }
+
+        visited.Add(position);
+
+        return visitReport;
+    }
+
     public override MoveReport MoveOn()
     {
-        //Debug.Log("Critical Path Visitor at " + position + " moving in direction " + direction);
+        if(alreadyVisitedCount > 1)
+        {
+            isDone = true;
+            return new MoveReport(false, isDone);
+        }
 
         PreliminaryMovementData prelimData = MoveOnPrelimWork();
 
@@ -472,12 +519,19 @@ public class CriticalPathVisitor: PixelVisitor
             Pixel neighbor = currentNeighbors.GetNeighbor(potentialDirection);
             if (neighbor != null)
             {
-                if (neighbor.Color.Equals(Color.red))
+                if (successfullyMoved && neighbor.Color.Equals(Color.red))
+                {
+                    CriticalPathVisitor newBranchStarter = new CriticalPathVisitor(new Vector2Int(neighbor.X, neighbor.Y), potentialDirection, toVisit, sectionNumber, visited);
+                    newBranchStarter.BuildingOffOf = this;
+
+                    newBranchStarters.Add(newBranchStarter);
+                    correspondingBranchStarterPositions.Add(newBranchStarter.Position);
+                }
+                else if (neighbor.Color.Equals(Color.red))
                 {
                     position += DirectionsUtil.GetDirectionVector(potentialDirection);
                     direction = potentialDirection;
                     successfullyMoved = true;
-                    break;
                 }
                 else if(neighbor.Color.Equals(Color.black))
                 {
