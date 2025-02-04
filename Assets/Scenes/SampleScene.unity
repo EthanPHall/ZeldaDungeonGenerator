@@ -578,9 +578,13 @@ MonoBehaviour:
   roomWidthMax: 3
   roomHeightMax: 3
   roomGridExtra: 10
-  minRoomSize: 7
+  minRoomSize: 9
+  minGoalForKeys: 3
+  maxGoalForKeys: 5
   wallPrefab: {fileID: 3532408704089409363, guid: 9bd69836cf3bc8a42a47a5a74fd820ad, type: 3}
   pathPrefab: {fileID: 5318241218987947542, guid: d8fcd9ba6ab374b40a61c04a17ee90ec, type: 3}
+  lockPrefab: {fileID: 36295725174266307, guid: d1547431741625045a36c3117667c447, type: 3}
+  keyPrefab: {fileID: 3221559063427032314, guid: c76994bc50782ae4fb6d68b1b772dabc, type: 3}
 --- !u!4 &142691045732961215
 Transform:
   m_ObjectHideFlags: 0

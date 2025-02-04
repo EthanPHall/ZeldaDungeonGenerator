@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Unity.VisualScripting.Antlr3.Runtime.Tree;
 using UnityEngine;
 
+
 public class MapGeneratorRevised : MonoBehaviour
 {
     public bool generateMap = false; 
@@ -20,8 +21,13 @@ public class MapGeneratorRevised : MonoBehaviour
     public int minRoomSize = 5;
     private int minRoomMinus1;
 
+    public int minGoalForKeys = 99;
+    public int maxGoalForKeys = 99;
+
     public GameObject wallPrefab;
     public GameObject pathPrefab;
+    public GameObject lockPrefab;
+    public GameObject keyPrefab;
 
     private Texture2D[] paths;
 
@@ -37,6 +43,8 @@ public class MapGeneratorRevised : MonoBehaviour
     {
         if (generateMap)
         {
+            maxGoalForKeys = Math.Min(maxGoalForKeys, KeyColorsUtil.GetNonBossColors().Count);
+
             minRoomMinus1 = minRoomSize - 1;
             generateMap = false;
             GenerateMap();
@@ -151,13 +159,15 @@ public class MapGeneratorRevised : MonoBehaviour
         }
 
         //Also fill in the empty spaces now between critical path locations.
-        List<Vector2Int> newPositions = new List<Vector2Int>();
+        List<Vector2Int> newPlusSortedPositions = new List<Vector2Int>();
         for (int i = 0, j = 1; i < criticalPathPositions.Count - 1; i++, j++)
         {
             Vector2Int currentPosition = criticalPathPositions[i];
             Vector2Int nextPosition = j >= criticalPathPositions.Count ? new Vector2Int(int.MinValue, int.MinValue) : criticalPathPositions[j];
 
-            if(nextPosition.x == int.MinValue)
+            newPlusSortedPositions.Add(currentPosition);
+
+            if (nextPosition.x == int.MinValue)
             {
                 break;
             }
@@ -169,10 +179,10 @@ public class MapGeneratorRevised : MonoBehaviour
 
             for(Vector2Int unmarkedPosition = currentPosition + direction; unmarkedPosition != nextPosition; unmarkedPosition += direction)
             {
-                newPositions.Add(unmarkedPosition);
+                newPlusSortedPositions.Add(unmarkedPosition);
             }
         }
-        criticalPathPositions.AddRange(newPositions);
+        criticalPathPositions = newPlusSortedPositions;
 
         /*5.Declare a 2D array / list of booleans to represent the map. The size of the array is the highest x and y values from step 3 multiplied by 2, plus at least 2.
          *  5 - 2.From there, we need to make sure that both dimensions of the map, -4, are divisible by 3.Rooms can and should share edges.*/
@@ -222,9 +232,34 @@ public class MapGeneratorRevised : MonoBehaviour
             }
         }
 
+        //Also match critical path locations to which rooms they are in.
+        List<Room> correspondingRooms = new List<Room>();
+        foreach(Vector2Int position in criticalPathPositions)
+        {
+            correspondingRooms.Add(null);
+        }
+        foreach(Room room in rooms)
+        {
+            List<Vector2Int> encompassed = room.GetEncompasedPositions();
+            foreach (Vector2Int position in encompassed)
+            {
+                int index = criticalPathPositions.IndexOf(position);
+                if (index != -1)
+                {
+                    correspondingRooms[index] = room;
+                }
+            }
+        }
+
         /* Step 8: Set every bool along the critical path to false. These are the openings. */
+        List<Vector2Int> openings = new List<Vector2Int>();
         foreach (Vector2Int position in criticalPathPositions)
         {
+            if(map[position.x, position.y])
+            {
+                openings.Add(new Vector2Int(position.x, position.y));
+            }
+
             map[position.x, position.y] = false;
         }
 
@@ -251,13 +286,337 @@ public class MapGeneratorRevised : MonoBehaviour
         {
             Instantiate(pathPrefab, new Vector3(position.x, 0, position.y), Quaternion.identity, pathParent.transform);
         }
+
+        /* Step 11: Generate locks and keys */
+        GenerateLocksAndKeys(criticalPathPositions, openings, correspondingRooms, rooms);
     }
 
-    private class Room
+    public class Key
+    {
+        private KeyColors color;
+        private Room roomParent;
+        private Key prerequisite;
+
+        private List<Room> potentialRooms = new List<Room>();
+        private List<Room> invalidRooms = new List<Room>();
+
+        private int maxRoomsDownThePath = 99;
+
+        public Key(KeyColors color, Room roomParent = null, Key prerequisite = null)
+        {
+            this.color = color;
+            this.roomParent = roomParent;
+            this.prerequisite = prerequisite;
+        }
+
+        public KeyColors Color
+        {
+            get { return color; }
+        }
+
+        public Room RoomParent
+        {
+            get { return roomParent; }
+        }
+
+        public void SetRoomParent(Room roomParent)
+        {
+            this.roomParent = roomParent;
+            potentialRooms.Clear();
+        }
+
+        public Key Prerequisite
+        {
+            get { return prerequisite; }
+        }
+
+        public void SetPrerequisite(Key prerequisite)
+        {
+            this.prerequisite = prerequisite;
+        }
+
+        public List<Room> PotentialRooms
+        {
+            get { return potentialRooms; }
+        }
+
+        public List<Room> InvalidRooms
+        {
+            get { return invalidRooms; }
+        }
+
+        public void AddPotentialRoom(Room room)
+        {
+            if(potentialRooms.Count >= maxRoomsDownThePath)
+            {
+                //Debug.LogWarning("Max rooms down the path reached for key " + color);
+                return;
+            }
+
+            if(invalidRooms.Contains(room))
+            {
+                //Debug.LogWarning("Room is invalid for key " + color);
+                return;
+            }
+
+            if(potentialRooms.Contains(room))
+            {
+                return;
+            }
+
+            potentialRooms.Add(room);
+        }
+
+        public bool CanAddPotentialRooms()
+        {
+            return potentialRooms.Count < maxRoomsDownThePath;
+        }
+
+        public void AddInvalidRoom(Room room)
+        {
+            invalidRooms.Add(room);
+        }
+    }
+
+    public enum KeyColors
+    {
+        Black,
+        Blue,
+        Green,
+        Red,
+        Yellow,
+        Cyan,
+        Magenta,
+        White
+    }
+
+    public static class KeyColorsUtil
+    {
+        public static Color GetColor(KeyColors keyColor)
+        {
+            switch (keyColor)
+            {
+                case KeyColors.Black:
+                    return Color.black;
+                case KeyColors.Blue:
+                    return Color.blue;
+                case KeyColors.Green:
+                    return Color.green;
+                case KeyColors.Red:
+                    return Color.red;
+                case KeyColors.Yellow:
+                    return Color.yellow;
+                case KeyColors.Cyan:
+                    return Color.cyan;
+                case KeyColors.Magenta:
+                    return Color.magenta;
+                case KeyColors.White:
+                    return Color.white;
+                default:
+                    return Color.grey;
+            }
+        }
+
+        public static List<KeyColors> GetNonBossColors()
+        {
+            return new List<KeyColors> { KeyColors.Blue, KeyColors.Green, KeyColors.Red, KeyColors.Yellow, KeyColors.Cyan, KeyColors.Magenta, KeyColors.White };
+        }   
+
+        public static KeyColors GetBossColor()
+        {
+            return KeyColors.Black;
+        }
+    }
+
+    public class Lock
+    {
+        private Color unlocksMe;
+        private Vector2Int position;
+
+        public Lock(Color unlocksMe, Vector2Int position)
+        {
+            this.unlocksMe = unlocksMe;
+            this.position = position;
+        }
+
+        public Color UnlocksMe
+        {
+            get { return unlocksMe; }
+        }
+
+        public Vector2Int Position
+        {
+            get { return position; }
+        }
+
+        public Lock Clone(Vector2Int position)
+        {
+            return new Lock(unlocksMe, position);
+        }
+    }
+
+    public void GenerateLocksAndKeys(List<Vector2Int> criticalPathPositions, List<Vector2Int> openings, List<Room> correspondingRooms, List<Room> allRooms)
+    {
+        Queue<Key> unplacedKeys = new Queue<Key>();
+        unplacedKeys.Enqueue(new Key(KeyColorsUtil.GetBossColor()));
+        
+        Queue<Key> potentialKeys = new Queue<Key>();
+        foreach (KeyColors color in KeyColorsUtil.GetNonBossColors())
+        {
+            potentialKeys.Enqueue(new Key(color));
+        }
+
+        List<Key> placedKeys = new List<Key>();
+
+        int spacesBetweenLocks = criticalPathPositions.Count / KeyColorsUtil.GetNonBossColors().Count;
+
+        List<Lock> locks = new List<Lock>();
+
+        List<Vector2Int> newWallLocations = new List<Vector2Int>();
+
+        int spacesSinceLastLock = 0;
+        bool bossRoomOpeningNeedsWall = false;
+        bool reachedFirstOpening = false;
+        Lock toCloneForNextOpening = null;
+        Room startRoom = correspondingRooms[0];
+        for (int i = criticalPathPositions.Count - 1; i >= 0; i--)
+        {
+            Vector2Int position = criticalPathPositions[i];
+
+            if(i == criticalPathPositions.Count - 1)
+            {
+                int bossRoomOpenings = correspondingRooms[i].GetNumberOfOpenings(openings);
+                if (bossRoomOpenings != 1)
+                {
+                    bossRoomOpeningNeedsWall = true;
+                }
+            }
+
+            if (openings.Contains(position))
+            {
+                if (!reachedFirstOpening)
+                {
+                    reachedFirstOpening = true;
+
+                    if (bossRoomOpeningNeedsWall)
+                    {
+                        newWallLocations.Add(position);
+                    }
+                    else
+                    {
+                        Lock bossLock = new Lock(KeyColorsUtil.GetColor(KeyColorsUtil.GetBossColor()), position);
+                        locks.Add(bossLock);
+                    }
+                }
+                else if (toCloneForNextOpening != null)
+                {
+                    Lock clone = toCloneForNextOpening.Clone(position);
+                    locks.Add(clone);
+
+                    toCloneForNextOpening = null;
+                    //spacesSinceLastLock = 0;
+                }
+                else if(spacesSinceLastLock >= spacesBetweenLocks && potentialKeys.Count > 0)
+                {
+                    int nextNonOpeningIndex = Mathf.Max(i - 1, 0);
+
+                    Key newKey = potentialKeys.Peek();
+
+                    Lock newLock = new Lock(KeyColorsUtil.GetColor(newKey.Color), position);
+
+                    Key toPlace = unplacedKeys.Count > 0 && unplacedKeys.Peek().PotentialRooms.Contains(correspondingRooms[i]) ? unplacedKeys.Dequeue() : null;
+                    bool success = true;
+                    if (toPlace != null)
+                    {
+                        toPlace.SetRoomParent(correspondingRooms[nextNonOpeningIndex]);
+                        correspondingRooms[nextNonOpeningIndex].AddKey(toPlace);
+                        placedKeys.Add(toPlace);
+                    }
+                    else if (correspondingRooms[nextNonOpeningIndex].GetNumberOfOpenings(openings) != 2)
+                    {
+                        success = false;
+                    }
+
+                    if(success)
+                    {
+                        locks.Add(newLock);
+                        toCloneForNextOpening = newLock;
+                        spacesSinceLastLock = 0;
+
+                        newKey = potentialKeys.Dequeue();
+
+                        if (correspondingRooms[nextNonOpeningIndex] == startRoom)
+                        {
+                            newKey.AddPotentialRoom(startRoom);
+                        }
+                        else
+                        {
+                            newKey.AddInvalidRoom(correspondingRooms[nextNonOpeningIndex]);
+                        }
+                        
+                        unplacedKeys.Enqueue(newKey);
+                    }
+                }
+            }
+
+            foreach(Key key in unplacedKeys)
+            {
+                if (key.CanAddPotentialRooms())
+                {
+                    key.AddPotentialRoom(correspondingRooms[i]);
+                }
+            }
+
+            spacesSinceLastLock++;
+        }
+
+        foreach(Key key in unplacedKeys)
+        {
+            if(key.PotentialRooms.Count > 0)
+            {
+                int randomIndex = UnityEngine.Random.Range(0, key.PotentialRooms.Count);
+                key.PotentialRooms[randomIndex].AddKey(key);
+                key.SetRoomParent(key.PotentialRooms[randomIndex]);
+                placedKeys.Add(key);
+            }
+        }
+
+        unplacedKeys.Clear();
+        GameObject keyParent = new GameObject("Key Parent");
+        keyParent.transform.parent = transform;
+        foreach (Room room in allRooms)
+        {
+            room.DetermineKeyPrerequisites(placedKeys);
+
+            for(int i = 0; i < room.ContainedKeys.Count; i++)
+            {
+                Key key = room.ContainedKeys[i];
+
+                Instantiate(keyPrefab, new Vector3(room.BottomLeft.x + room.Width / 2, 0, room.BottomLeft.y + room.Height / 2), Quaternion.identity, keyParent.transform).GetComponent<Renderer>().material.color = KeyColorsUtil.GetColor(key.Color);
+            }
+        }
+
+        foreach (Vector2Int wallPosition in newWallLocations)
+        {
+            Instantiate(wallPrefab, new Vector3(wallPosition.x, 0, wallPosition.y), Quaternion.identity);
+        }
+
+        GameObject lockParent = new GameObject("Lock Parent");
+        lockParent.transform.parent = transform;
+        foreach (Lock lockPosition in locks)
+        {
+            GameObject newLock = Instantiate(lockPrefab, new Vector3(lockPosition.Position.x, 0, lockPosition.Position.y), Quaternion.identity, lockParent.transform);
+            newLock.GetComponent<Renderer>().material.color = lockPosition.UnlocksMe;
+        }
+    }
+
+    public class Room
     {
         private Vector2Int bottomLeft;
         private int width;
         private int height;
+
+        private List<Key> containedKeys = new List<Key>();
 
         public Room(Vector2Int bottomLeft, int width, int height)
         {
@@ -279,6 +638,43 @@ public class MapGeneratorRevised : MonoBehaviour
         public int Height
         {
             get { return height; }
+        }
+
+        public void AddKey(Key key)
+        {
+            containedKeys.Add(key);
+        }
+
+        public List<Key> ContainedKeys
+        {
+            get { return containedKeys; }
+        }
+
+        public void DetermineKeyPrerequisites(List<Key> placedKeys)
+        {
+            if (containedKeys.Count == 0 || containedKeys.Count == 1)
+            {
+                return;
+            }
+
+            bool foundFirstKey = false;
+            Key previousKey = null;
+            foreach (Key key in placedKeys)
+            {
+                if (key.RoomParent == this)
+                {
+                    if (!foundFirstKey)
+                    {
+                        foundFirstKey = true;
+                    }
+                    else
+                    {
+                        key.SetPrerequisite(previousKey);
+                    }
+                }
+
+                previousKey = key;
+            }
         }
 
         public List<Vector2Int> GetEncompasedPositions()
@@ -313,6 +709,27 @@ public class MapGeneratorRevised : MonoBehaviour
             }
 
             return positions;
+        }
+
+        public int GetNumberOfOpenings(List<Vector2Int> openings)
+        {
+            int openingsInRoom = 0;
+
+            List<Vector2Int> perimeter = GetPerimeterPositions();
+
+            foreach (Vector2Int position in openings)
+            {
+                if (perimeter.Contains(position))
+                {
+                    openingsInRoom++;
+                }
+            }
+            return openingsInRoom;
+        }
+
+        public override string ToString()
+        {
+            return "Bottom Left: " + bottomLeft + " Width: " + width + " Height: " + height;
         }
     }
 
