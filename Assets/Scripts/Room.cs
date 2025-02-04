@@ -46,28 +46,42 @@ public partial class MapGeneratorRevised
 
         public void DetermineKeyPrerequisites(List<Key> placedKeys)
         {
-            if (containedKeys.Count == 0 || containedKeys.Count == 1)
+            if (containedKeys.Count <= 1)
             {
                 return;
             }
 
-            bool foundFirstKey = false;
-            Key previousKey = null;
-            foreach (Key key in placedKeys)
+            Key earliestKey = null;
+            foreach(Key key in containedKeys)
             {
-                if (key.RoomParent == this)
+                if (earliestKey == null || KeyColorsUtil.GetRelativePlacement(key.Color) < KeyColorsUtil.GetRelativePlacement(earliestKey.Color))
                 {
-                    if (!foundFirstKey)
+                    earliestKey = key;
+                }
+            }
+
+            foreach (Key key in containedKeys)
+            {
+                if (key != earliestKey)
+                {
+                    KeyColors previousKeyColor = KeyColorsUtil.GetPreviousColor(key.Color);
+
+                    if(previousKeyColor == KeyColors.Invalid)
                     {
-                        foundFirstKey = true;
+                        continue;
+                    }
+
+                    Color previousActualColor = KeyColorsUtil.GetColor(previousKeyColor);
+                    Key prerequisiteKey = placedKeys.Find(x => x.Color == previousKeyColor);
+                    if (prerequisiteKey != null)
+                    {
+                        key.SetPrerequisite(prerequisiteKey);
                     }
                     else
                     {
-                        key.SetPrerequisite(previousKey);
+                        Debug.LogError("Could not find prerequisite key for key " + key.Color);
                     }
                 }
-
-                previousKey = key;
             }
         }
 

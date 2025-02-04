@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Unity.VisualScripting.Antlr3.Runtime.Tree;
 using UnityEngine;
+using static MapGeneratorRevised;
 
 
 public partial class MapGeneratorRevised : MonoBehaviour
@@ -432,7 +433,9 @@ public partial class MapGeneratorRevised : MonoBehaviour
             {
                 Key key = room.ContainedKeys[i];
 
-                Instantiate(keyPrefab, new Vector3(room.BottomLeft.x + room.Width / 2, 0, room.BottomLeft.y + room.Height / 2), Quaternion.identity, keyParent.transform).GetComponent<Renderer>().material.color = KeyColorsUtil.GetColor(key.Color);
+                GameObject keyGO = Instantiate(keyPrefab, new Vector3(room.BottomLeft.x + room.Width / 2, 0, room.BottomLeft.y + room.Height / 2), Quaternion.identity, keyParent.transform);
+                keyGO.GetComponent<Renderer>().material.color = KeyColorsUtil.GetColor(key.Color);
+                keyGO.GetComponent<KeyGameObject>().prerequisite = key.Prerequisite == null ? Color.clear : KeyColorsUtil.GetColor(key.Prerequisite.Color);
             }
         }
 
