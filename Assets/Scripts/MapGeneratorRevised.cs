@@ -29,6 +29,7 @@ public partial class MapGeneratorRevised : MonoBehaviour
     public GameObject pathPrefab;
     public GameObject lockPrefab;
     public GameObject keyPrefab;
+    public GameObject goalPrefab;
 
     private Texture2D[] paths;
 
@@ -411,6 +412,9 @@ public partial class MapGeneratorRevised : MonoBehaviour
                 {
                     bossRoomOpeningNeedsWall = true;
                 }
+
+                Room bossRoom = correspondingRooms[i];
+                GameObject goal = Instantiate(goalPrefab, new Vector3(bossRoom.BottomLeft.x + bossRoom.Width / 2, 0, bossRoom.BottomLeft.y + bossRoom.Height / 2), Quaternion.identity, mapParent.transform);
             }
 
             if (openings.Contains(position))
